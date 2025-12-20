@@ -1,0 +1,95 @@
+package config
+
+import (
+	"os"
+	"strconv"
+	"strings"
+)
+
+type Config struct {
+	// Server
+	Port string
+	Env  string // "development", "production"
+
+	// Database
+	DatabaseURL string
+
+	// Auth
+	JWTSecret string
+
+	// CORS
+	AllowedOrigins []string
+	FrontendURL    string
+
+	// OAuth
+	GoogleClientID     string
+	GoogleClientSecret string
+	GoogleRedirectURI  string
+
+	FacebookAppID       string
+	FacebookAppSecret   string
+	FacebookRedirectURI string
+
+	// AI
+	OpenAIAPIKey string
+
+	// Features
+	EnableAIChat bool
+}
+
+func Load() *Config {
+	return &Config{
+		// Server
+		Port: getEnv("PORT", "8080"),
+		Env:  getEnv("ENV", "development"),
+
+		// Database
+		DatabaseURL: getEnv("DATABASE_URL", "postgres://localhost:5432/wealthpath?sslmode=disable"),
+
+		// Auth
+		JWTSecret: getEnv("JWT_SECRET", "dev-secret-change-in-production"),
+
+		// CORS
+		AllowedOrigins: strings.Split(getEnv("ALLOWED_ORIGINS", "http://localhost:3000"), ","),
+		FrontendURL:    getEnv("FRONTEND_URL", "http://localhost:3000"),
+
+		// OAuth
+		GoogleClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
+		GoogleClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
+		GoogleRedirectURI:  os.Getenv("GOOGLE_REDIRECT_URI"),
+
+		FacebookAppID:       os.Getenv("FACEBOOK_APP_ID"),
+		FacebookAppSecret:   os.Getenv("FACEBOOK_APP_SECRET"),
+		FacebookRedirectURI: os.Getenv("FACEBOOK_REDIRECT_URI"),
+
+		// AI
+		OpenAIAPIKey: os.Getenv("OPENAI_API_KEY"),
+
+		// Features
+		EnableAIChat: getBoolEnv("ENABLE_AI_CHAT", true),
+	}
+}
+
+func (c *Config) IsDevelopment() bool {
+	return c.Env == "development"
+}
+
+func (c *Config) IsProduction() bool {
+	return c.Env == "production"
+}
+
+func getEnv(key, defaultValue string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return defaultValue
+}
+
+func getBoolEnv(key string, defaultValue bool) bool {
+	if value := os.Getenv(key); value != "" {
+		if b, err := strconv.ParseBool(value); err == nil {
+			return b
+		}
+	}
+	return defaultValue
+}

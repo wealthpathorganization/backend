@@ -1,0 +1,1826 @@
+basePath: /api
+definitions:
+  github_com_wealthpath_backend_internal_model.AmortizationRow:
+    properties:
+      interest:
+        type: number
+      month:
+        type: integer
+      payment:
+        type: number
+      principal:
+        type: number
+      remainingBalance:
+        type: number
+    type: object
+  github_com_wealthpath_backend_internal_model.Budget:
+    properties:
+      amount:
+        type: number
+      category:
+        type: string
+      createdAt:
+        type: string
+      currency:
+        type: string
+      endDate:
+        type: string
+      id:
+        type: string
+      period:
+        description: monthly, weekly, yearly
+        type: string
+      startDate:
+        type: string
+      updatedAt:
+        type: string
+      userId:
+        type: string
+    type: object
+  github_com_wealthpath_backend_internal_model.BudgetWithSpent:
+    properties:
+      amount:
+        type: number
+      category:
+        type: string
+      createdAt:
+        type: string
+      currency:
+        type: string
+      endDate:
+        type: string
+      id:
+        type: string
+      percentage:
+        type: number
+      period:
+        description: monthly, weekly, yearly
+        type: string
+      remaining:
+        type: number
+      spent:
+        type: number
+      startDate:
+        type: string
+      updatedAt:
+        type: string
+      userId:
+        type: string
+    type: object
+  github_com_wealthpath_backend_internal_model.DashboardData:
+    properties:
+      budgetSummary:
+        items:
+          $ref: '#/definitions/github_com_wealthpath_backend_internal_model.BudgetWithSpent'
+        type: array
+      expensesByCategory:
+        additionalProperties:
+          type: number
+        type: object
+      incomeVsExpenses:
+        items:
+          $ref: '#/definitions/github_com_wealthpath_backend_internal_model.MonthlyComparison'
+        type: array
+      netCashFlow:
+        type: number
+      recentTransactions:
+        items:
+          $ref: '#/definitions/github_com_wealthpath_backend_internal_model.Transaction'
+        type: array
+      savingsGoals:
+        items:
+          $ref: '#/definitions/github_com_wealthpath_backend_internal_model.SavingsGoal'
+        type: array
+      totalDebt:
+        type: number
+      totalExpenses:
+        type: number
+      totalIncome:
+        type: number
+      totalSavings:
+        type: number
+    type: object
+  github_com_wealthpath_backend_internal_model.Debt:
+    properties:
+      createdAt:
+        type: string
+      currency:
+        type: string
+      currentBalance:
+        type: number
+      dueDay:
+        description: Day of month
+        type: integer
+      expectedPayoff:
+        type: string
+      id:
+        type: string
+      interestRate:
+        description: APR as percentage
+        type: number
+      minimumPayment:
+        type: number
+      name:
+        type: string
+      originalAmount:
+        type: number
+      startDate:
+        type: string
+      type:
+        $ref: '#/definitions/github_com_wealthpath_backend_internal_model.DebtType'
+      updatedAt:
+        type: string
+      userId:
+        type: string
+    type: object
+  github_com_wealthpath_backend_internal_model.DebtType:
+    enum:
+    - mortgage
+    - auto_loan
+    - student_loan
+    - credit_card
+    - personal_loan
+    - other
+    type: string
+    x-enum-varnames:
+    - DebtTypeMortgage
+    - DebtTypeAutoLoan
+    - DebtTypeStudentLoan
+    - DebtTypeCreditCard
+    - DebtTypePersonalLoan
+    - DebtTypeOther
+  github_com_wealthpath_backend_internal_model.MonthlyComparison:
+    properties:
+      expenses:
+        type: number
+      income:
+        type: number
+      month:
+        type: string
+    type: object
+  github_com_wealthpath_backend_internal_model.PayoffPlan:
+    properties:
+      amortizationPlan:
+        items:
+          $ref: '#/definitions/github_com_wealthpath_backend_internal_model.AmortizationRow'
+        type: array
+      currentBalance:
+        type: number
+      debtId:
+        type: string
+      monthlyPayment:
+        type: number
+      monthsToPayoff:
+        type: integer
+      payoffDate:
+        type: string
+      totalInterest:
+        type: number
+      totalPayment:
+        type: number
+    type: object
+  github_com_wealthpath_backend_internal_model.RecurringFrequency:
+    enum:
+    - daily
+    - weekly
+    - biweekly
+    - monthly
+    - yearly
+    type: string
+    x-enum-varnames:
+    - FrequencyDaily
+    - FrequencyWeekly
+    - FrequencyBiweekly
+    - FrequencyMonthly
+    - FrequencyYearly
+  github_com_wealthpath_backend_internal_model.RecurringTransaction:
+    properties:
+      amount:
+        type: number
+      category:
+        type: string
+      createdAt:
+        type: string
+      currency:
+        type: string
+      description:
+        type: string
+      endDate:
+        type: string
+      frequency:
+        $ref: '#/definitions/github_com_wealthpath_backend_internal_model.RecurringFrequency'
+      id:
+        type: string
+      isActive:
+        type: boolean
+      lastGenerated:
+        type: string
+      nextOccurrence:
+        type: string
+      startDate:
+        type: string
+      type:
+        $ref: '#/definitions/github_com_wealthpath_backend_internal_model.TransactionType'
+      updatedAt:
+        type: string
+      userId:
+        type: string
+    type: object
+  github_com_wealthpath_backend_internal_model.SavingsGoal:
+    properties:
+      color:
+        type: string
+      createdAt:
+        type: string
+      currency:
+        type: string
+      currentAmount:
+        type: number
+      icon:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+      targetAmount:
+        type: number
+      targetDate:
+        type: string
+      updatedAt:
+        type: string
+      userId:
+        type: string
+    type: object
+  github_com_wealthpath_backend_internal_model.Transaction:
+    properties:
+      amount:
+        type: number
+      category:
+        type: string
+      createdAt:
+        type: string
+      currency:
+        type: string
+      date:
+        type: string
+      description:
+        type: string
+      id:
+        type: string
+      type:
+        $ref: '#/definitions/github_com_wealthpath_backend_internal_model.TransactionType'
+      updatedAt:
+        type: string
+      userId:
+        type: string
+    type: object
+  github_com_wealthpath_backend_internal_model.TransactionType:
+    enum:
+    - income
+    - expense
+    type: string
+    x-enum-varnames:
+    - TransactionTypeIncome
+    - TransactionTypeExpense
+  github_com_wealthpath_backend_internal_model.User:
+    properties:
+      avatarUrl:
+        type: string
+      createdAt:
+        type: string
+      currency:
+        type: string
+      email:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+      oauthProvider:
+        type: string
+      updatedAt:
+        type: string
+    type: object
+  github_com_wealthpath_backend_internal_service.AuthResponse:
+    properties:
+      token:
+        type: string
+      user:
+        $ref: '#/definitions/github_com_wealthpath_backend_internal_model.User'
+    type: object
+  github_com_wealthpath_backend_internal_service.ContributeInput:
+    properties:
+      amount:
+        type: number
+    type: object
+  github_com_wealthpath_backend_internal_service.CreateBudgetInput:
+    properties:
+      amount:
+        type: number
+      category:
+        type: string
+      currency:
+        type: string
+      endDate:
+        type: string
+      period:
+        description: monthly, weekly, yearly
+        type: string
+      startDate:
+        type: string
+    type: object
+  github_com_wealthpath_backend_internal_service.CreateDebtInput:
+    properties:
+      currency:
+        type: string
+      currentBalance:
+        type: number
+      dueDay:
+        type: integer
+      interestRate:
+        description: APR as percentage (e.g., 5.5 for 5.5%)
+        type: number
+      minimumPayment:
+        type: number
+      name:
+        type: string
+      originalAmount:
+        type: number
+      startDate:
+        type: string
+      type:
+        $ref: '#/definitions/github_com_wealthpath_backend_internal_model.DebtType'
+    type: object
+  github_com_wealthpath_backend_internal_service.CreateRecurringInput:
+    properties:
+      amount:
+        type: number
+      category:
+        type: string
+      currency:
+        type: string
+      description:
+        type: string
+      endDate:
+        type: string
+      frequency:
+        $ref: '#/definitions/github_com_wealthpath_backend_internal_model.RecurringFrequency'
+      startDate:
+        type: string
+      type:
+        $ref: '#/definitions/github_com_wealthpath_backend_internal_model.TransactionType'
+    type: object
+  github_com_wealthpath_backend_internal_service.CreateSavingsGoalInput:
+    properties:
+      color:
+        type: string
+      currency:
+        type: string
+      icon:
+        type: string
+      name:
+        type: string
+      targetAmount:
+        type: number
+      targetDate:
+        type: string
+    type: object
+  github_com_wealthpath_backend_internal_service.CreateTransactionInput:
+    properties:
+      amount:
+        type: number
+      category:
+        type: string
+      currency:
+        type: string
+      date:
+        type: string
+      description:
+        type: string
+      type:
+        $ref: '#/definitions/github_com_wealthpath_backend_internal_model.TransactionType'
+    type: object
+  github_com_wealthpath_backend_internal_service.InterestCalculatorResult:
+    properties:
+      monthlyPayment:
+        type: number
+      payoffDate:
+        type: string
+      totalInterest:
+        type: number
+      totalPayment:
+        type: number
+    type: object
+  github_com_wealthpath_backend_internal_service.LoginInput:
+    properties:
+      email:
+        type: string
+      password:
+        type: string
+    type: object
+  github_com_wealthpath_backend_internal_service.MakePaymentInput:
+    properties:
+      amount:
+        type: number
+      date:
+        type: string
+    type: object
+  github_com_wealthpath_backend_internal_service.RegisterInput:
+    properties:
+      currency:
+        type: string
+      email:
+        type: string
+      name:
+        type: string
+      password:
+        type: string
+    type: object
+  github_com_wealthpath_backend_internal_service.UpdateBudgetInput:
+    properties:
+      amount:
+        type: number
+      category:
+        type: string
+      currency:
+        type: string
+      endDate:
+        type: string
+      period:
+        type: string
+      startDate:
+        type: string
+    type: object
+  github_com_wealthpath_backend_internal_service.UpdateDebtInput:
+    properties:
+      currency:
+        type: string
+      currentBalance:
+        type: number
+      dueDay:
+        type: integer
+      interestRate:
+        type: number
+      minimumPayment:
+        type: number
+      name:
+        type: string
+      originalAmount:
+        type: number
+      startDate:
+        type: string
+      type:
+        $ref: '#/definitions/github_com_wealthpath_backend_internal_model.DebtType'
+    type: object
+  github_com_wealthpath_backend_internal_service.UpdateRecurringInput:
+    properties:
+      amount:
+        type: number
+      category:
+        type: string
+      currency:
+        type: string
+      description:
+        type: string
+      endDate:
+        type: string
+      frequency:
+        $ref: '#/definitions/github_com_wealthpath_backend_internal_model.RecurringFrequency'
+      isActive:
+        type: boolean
+      startDate:
+        type: string
+      type:
+        $ref: '#/definitions/github_com_wealthpath_backend_internal_model.TransactionType'
+    type: object
+  github_com_wealthpath_backend_internal_service.UpdateSavingsGoalInput:
+    properties:
+      color:
+        type: string
+      currency:
+        type: string
+      currentAmount:
+        type: number
+      icon:
+        type: string
+      name:
+        type: string
+      targetAmount:
+        type: number
+      targetDate:
+        type: string
+    type: object
+  github_com_wealthpath_backend_internal_service.UpdateSettingsInput:
+    properties:
+      currency:
+        type: string
+      name:
+        type: string
+    type: object
+  github_com_wealthpath_backend_internal_service.UpdateTransactionInput:
+    properties:
+      amount:
+        type: number
+      category:
+        type: string
+      currency:
+        type: string
+      date:
+        type: string
+      description:
+        type: string
+      type:
+        $ref: '#/definitions/github_com_wealthpath_backend_internal_model.TransactionType'
+    type: object
+  internal_handler.ErrorResponse:
+    properties:
+      error:
+        type: string
+      field:
+        type: string
+    type: object
+host: localhost:8080
+info:
+  contact:
+    email: support@wealthpath.io
+    name: API Support
+  description: Personal finance management API for tracking transactions, budgets,
+    savings goals, and debts.
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+  termsOfService: http://swagger.io/terms/
+  title: WealthPath API
+  version: "1.0"
+paths:
+  /auth/login:
+    post:
+      consumes:
+      - application/json
+      description: Authenticate user with email and password
+      parameters:
+      - description: Login credentials
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_wealthpath_backend_internal_service.LoginInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_wealthpath_backend_internal_service.AuthResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+        "401":
+          description: Invalid credentials
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+      summary: Login user
+      tags:
+      - auth
+  /auth/me:
+    get:
+      description: Get the authenticated user's profile
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_wealthpath_backend_internal_model.User'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get current user
+      tags:
+      - auth
+  /auth/register:
+    post:
+      consumes:
+      - application/json
+      description: Create a new user account with email and password
+      parameters:
+      - description: Registration data
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_wealthpath_backend_internal_service.RegisterInput'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/github_com_wealthpath_backend_internal_service.AuthResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+        "409":
+          description: Email already in use
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+      summary: Register a new user
+      tags:
+      - auth
+  /auth/settings:
+    put:
+      consumes:
+      - application/json
+      description: Update the authenticated user's profile settings
+      parameters:
+      - description: Settings to update
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_wealthpath_backend_internal_service.UpdateSettingsInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_wealthpath_backend_internal_model.User'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update user settings
+      tags:
+      - auth
+  /budgets:
+    get:
+      description: Get all budgets with spent amounts for the current user
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/github_com_wealthpath_backend_internal_model.BudgetWithSpent'
+            type: array
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List budgets
+      tags:
+      - budgets
+    post:
+      consumes:
+      - application/json
+      description: Create a new budget for a category
+      parameters:
+      - description: Budget data
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_wealthpath_backend_internal_service.CreateBudgetInput'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/github_com_wealthpath_backend_internal_model.Budget'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create a budget
+      tags:
+      - budgets
+  /budgets/{id}:
+    delete:
+      description: Delete a budget by ID
+      parameters:
+      - description: Budget ID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete a budget
+      tags:
+      - budgets
+    get:
+      description: Get a budget by ID
+      parameters:
+      - description: Budget ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_wealthpath_backend_internal_model.Budget'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get a budget
+      tags:
+      - budgets
+    put:
+      consumes:
+      - application/json
+      description: Update an existing budget
+      parameters:
+      - description: Budget ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Updated budget data
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_wealthpath_backend_internal_service.UpdateBudgetInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_wealthpath_backend_internal_model.Budget'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update a budget
+      tags:
+      - budgets
+  /dashboard:
+    get:
+      description: Get aggregated financial data for the current month
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_wealthpath_backend_internal_model.DashboardData'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get dashboard data
+      tags:
+      - dashboard
+  /dashboard/monthly/{year}/{month}:
+    get:
+      description: Get aggregated financial data for a specific month
+      parameters:
+      - description: Year (e.g., 2024)
+        in: path
+        name: year
+        required: true
+        type: integer
+      - description: Month (1-12)
+        in: path
+        name: month
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_wealthpath_backend_internal_model.DashboardData'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get monthly dashboard data
+      tags:
+      - dashboard
+  /debts:
+    get:
+      description: Get all debts for the current user
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/github_com_wealthpath_backend_internal_model.Debt'
+            type: array
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List debts
+      tags:
+      - debts
+    post:
+      consumes:
+      - application/json
+      description: Create a new debt entry
+      parameters:
+      - description: Debt data
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_wealthpath_backend_internal_service.CreateDebtInput'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/github_com_wealthpath_backend_internal_model.Debt'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create a debt
+      tags:
+      - debts
+  /debts/{id}:
+    delete:
+      description: Delete a debt by ID
+      parameters:
+      - description: Debt ID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete a debt
+      tags:
+      - debts
+    get:
+      description: Get a debt by ID
+      parameters:
+      - description: Debt ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_wealthpath_backend_internal_model.Debt'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get a debt
+      tags:
+      - debts
+    put:
+      consumes:
+      - application/json
+      description: Update an existing debt
+      parameters:
+      - description: Debt ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Updated debt data
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_wealthpath_backend_internal_service.UpdateDebtInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_wealthpath_backend_internal_model.Debt'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update a debt
+      tags:
+      - debts
+  /debts/{id}/payment:
+    post:
+      consumes:
+      - application/json
+      description: Record a payment against a debt
+      parameters:
+      - description: Debt ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Payment data
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_wealthpath_backend_internal_service.MakePaymentInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_wealthpath_backend_internal_model.Debt'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Make a debt payment
+      tags:
+      - debts
+  /debts/{id}/payoff-plan:
+    get:
+      description: Calculate a payoff plan for a debt
+      parameters:
+      - description: Debt ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Monthly payment amount
+        in: query
+        name: monthlyPayment
+        type: number
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_wealthpath_backend_internal_model.PayoffPlan'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get debt payoff plan
+      tags:
+      - debts
+  /debts/calculator:
+    get:
+      description: Calculate interest and payment schedule for a loan
+      parameters:
+      - description: Loan principal amount
+        in: query
+        name: principal
+        required: true
+        type: number
+      - description: Annual interest rate (percentage)
+        in: query
+        name: interestRate
+        required: true
+        type: number
+      - description: Loan term in months
+        in: query
+        name: termMonths
+        required: true
+        type: integer
+      - default: fixed
+        description: Payment type (fixed or interest_only)
+        in: query
+        name: paymentType
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_wealthpath_backend_internal_service.InterestCalculatorResult'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+      summary: Calculate loan interest
+      tags:
+      - debts
+  /recurring:
+    get:
+      description: Get all recurring transactions for the current user
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/github_com_wealthpath_backend_internal_model.RecurringTransaction'
+            type: array
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List recurring transactions
+      tags:
+      - recurring
+    post:
+      consumes:
+      - application/json
+      description: Create a new recurring transaction (income or expense)
+      parameters:
+      - description: Recurring transaction data
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_wealthpath_backend_internal_service.CreateRecurringInput'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/github_com_wealthpath_backend_internal_model.RecurringTransaction'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create a recurring transaction
+      tags:
+      - recurring
+  /recurring/{id}:
+    delete:
+      description: Delete a recurring transaction by ID
+      parameters:
+      - description: Recurring Transaction ID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete a recurring transaction
+      tags:
+      - recurring
+    get:
+      description: Get a recurring transaction by ID
+      parameters:
+      - description: Recurring Transaction ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_wealthpath_backend_internal_model.RecurringTransaction'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get a recurring transaction
+      tags:
+      - recurring
+    put:
+      consumes:
+      - application/json
+      description: Update an existing recurring transaction
+      parameters:
+      - description: Recurring Transaction ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Updated recurring transaction data
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_wealthpath_backend_internal_service.UpdateRecurringInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_wealthpath_backend_internal_model.RecurringTransaction'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update a recurring transaction
+      tags:
+      - recurring
+  /recurring/{id}/pause:
+    post:
+      description: Pause a recurring transaction to stop automatic generation
+      parameters:
+      - description: Recurring Transaction ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_wealthpath_backend_internal_model.RecurringTransaction'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Pause a recurring transaction
+      tags:
+      - recurring
+  /recurring/{id}/resume:
+    post:
+      description: Resume a paused recurring transaction
+      parameters:
+      - description: Recurring Transaction ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_wealthpath_backend_internal_model.RecurringTransaction'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Resume a recurring transaction
+      tags:
+      - recurring
+  /recurring/upcoming:
+    get:
+      description: Get the next 10 upcoming recurring transactions
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/github_com_wealthpath_backend_internal_model.RecurringTransaction'
+            type: array
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get upcoming recurring transactions
+      tags:
+      - recurring
+  /savings-goals:
+    get:
+      description: Get all savings goals for the current user
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/github_com_wealthpath_backend_internal_model.SavingsGoal'
+            type: array
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List savings goals
+      tags:
+      - savings-goals
+    post:
+      consumes:
+      - application/json
+      description: Create a new savings goal
+      parameters:
+      - description: Savings goal data
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_wealthpath_backend_internal_service.CreateSavingsGoalInput'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/github_com_wealthpath_backend_internal_model.SavingsGoal'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create a savings goal
+      tags:
+      - savings-goals
+  /savings-goals/{id}:
+    delete:
+      description: Delete a savings goal by ID
+      parameters:
+      - description: Savings Goal ID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete a savings goal
+      tags:
+      - savings-goals
+    get:
+      description: Get a savings goal by ID
+      parameters:
+      - description: Savings Goal ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_wealthpath_backend_internal_model.SavingsGoal'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get a savings goal
+      tags:
+      - savings-goals
+    put:
+      consumes:
+      - application/json
+      description: Update an existing savings goal
+      parameters:
+      - description: Savings Goal ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Updated savings goal data
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_wealthpath_backend_internal_service.UpdateSavingsGoalInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_wealthpath_backend_internal_model.SavingsGoal'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update a savings goal
+      tags:
+      - savings-goals
+  /savings-goals/{id}/contribute:
+    post:
+      consumes:
+      - application/json
+      description: Add money to a savings goal
+      parameters:
+      - description: Savings Goal ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Contribution amount
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_wealthpath_backend_internal_service.ContributeInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_wealthpath_backend_internal_model.SavingsGoal'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Contribute to a savings goal
+      tags:
+      - savings-goals
+  /transactions:
+    get:
+      description: Get a list of transactions with optional filters
+      parameters:
+      - default: 0
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Items per page
+        in: query
+        name: pageSize
+        type: integer
+      - description: Filter by type (income or expense)
+        in: query
+        name: type
+        type: string
+      - description: Filter by category
+        in: query
+        name: category
+        type: string
+      - description: Filter by start date (YYYY-MM-DD)
+        in: query
+        name: startDate
+        type: string
+      - description: Filter by end date (YYYY-MM-DD)
+        in: query
+        name: endDate
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/github_com_wealthpath_backend_internal_model.Transaction'
+            type: array
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List transactions
+      tags:
+      - transactions
+    post:
+      consumes:
+      - application/json
+      description: Create a new income or expense transaction
+      parameters:
+      - description: Transaction data
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_wealthpath_backend_internal_service.CreateTransactionInput'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/github_com_wealthpath_backend_internal_model.Transaction'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create a transaction
+      tags:
+      - transactions
+  /transactions/{id}:
+    delete:
+      description: Delete a transaction by ID
+      parameters:
+      - description: Transaction ID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete a transaction
+      tags:
+      - transactions
+    get:
+      description: Get a transaction by ID
+      parameters:
+      - description: Transaction ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_wealthpath_backend_internal_model.Transaction'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get a transaction
+      tags:
+      - transactions
+    put:
+      consumes:
+      - application/json
+      description: Update an existing transaction
+      parameters:
+      - description: Transaction ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Updated transaction data
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_wealthpath_backend_internal_service.UpdateTransactionInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_wealthpath_backend_internal_model.Transaction'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update a transaction
+      tags:
+      - transactions
+securityDefinitions:
+  BearerAuth:
+    description: Type "Bearer" followed by a space and JWT token.
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"
