@@ -13,9 +13,19 @@ import (
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
+	"github.com/go-rod/rod"
 	"github.com/shopspring/decimal"
 	"github.com/wealthpath/backend/internal/model"
 )
+
+// BrowserScraper interface for scrapers that can use headless browser
+type BrowserScraper interface {
+	BankCode() string
+	BankName() string
+	NeedsBrowser() bool
+	ScrapeWithBrowser(ctx context.Context, page *rod.Page) ([]model.InterestRate, error)
+	ScrapeRates(ctx context.Context) ([]model.InterestRate, error)
+}
 
 // Common user agents for rotation
 var userAgents = []string{
@@ -38,6 +48,39 @@ func (b *BaseScraper) BankCode() string { return b.BankCode_ }
 
 // BankName returns the bank name
 func (b *BaseScraper) BankName() string { return b.BankName_ }
+
+// NeedsBrowser returns false for HTTP-based scrapers
+func (b *BaseScraper) NeedsBrowser() bool { return false }
+
+// ScrapeWithBrowser is a no-op for HTTP-based scrapers
+func (b *BaseScraper) ScrapeWithBrowser(ctx context.Context, page *rod.Page) ([]model.InterestRate, error) {
+	return b.ScrapeRates(ctx)
+}
+
+// ScrapeRates should be implemented by concrete scrapers
+func (b *BaseScraper) ScrapeRates(ctx context.Context) ([]model.InterestRate, error) {
+	return nil, fmt.Errorf("ScrapeRates not implemented")
+}
+
+// BrowserBaseScraper extends BaseScraper with browser support
+type BrowserBaseScraper struct {
+	BaseScraper
+	needsBrowser bool
+}
+
+// NeedsBrowser returns true if browser is required for scraping
+func (b *BrowserBaseScraper) NeedsBrowser() bool {
+	return b.needsBrowser
+}
+
+// ParseHTMLFromPage extracts HTML from a Rod page and parses it with goquery
+func ParseHTMLFromPage(page *rod.Page) (*goquery.Document, error) {
+	html, err := page.HTML()
+	if err != nil {
+		return nil, fmt.Errorf("getting page HTML: %w", err)
+	}
+	return goquery.NewDocumentFromReader(strings.NewReader(html))
+}
 
 // GetRandomUserAgent returns a random user agent
 func GetRandomUserAgent() string {

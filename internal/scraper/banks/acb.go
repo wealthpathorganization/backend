@@ -7,33 +7,37 @@ import (
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
+	"github.com/go-rod/rod"
 	"github.com/wealthpath/backend/internal/model"
 )
 
 const (
 	acbBankCode = "acb"
 	acbBankName = "ACB"
-	acbRateURL  = "https://www.acb.com.vn/lai-suat-tien-gui"
+	acbRateURL  = "https://acb.com.vn/lai-suat-tien-gui"
 )
 
 // ACBScraper scrapes interest rates from ACB
 type ACBScraper struct {
-	BaseScraper
+	BrowserBaseScraper
 }
 
 // NewACBScraper creates a new ACB scraper
 func NewACBScraper(client *http.Client) *ACBScraper {
 	return &ACBScraper{
-		BaseScraper: BaseScraper{
-			Client:    client,
-			BankCode_: acbBankCode,
-			BankName_: acbBankName,
-			RateURL:   acbRateURL,
+		BrowserBaseScraper: BrowserBaseScraper{
+			BaseScraper: BaseScraper{
+				Client:    client,
+				BankCode_: acbBankCode,
+				BankName_: acbBankName,
+				RateURL:   acbRateURL,
+			},
+			needsBrowser: true,
 		},
 	}
 }
 
-// ScrapeRates scrapes interest rates from ACB
+// ScrapeRates scrapes interest rates from ACB using HTTP (fallback)
 func (s *ACBScraper) ScrapeRates(ctx context.Context) ([]model.InterestRate, error) {
 	doc, err := s.FetchPage(ctx, s.RateURL)
 	if err != nil {
@@ -42,6 +46,57 @@ func (s *ACBScraper) ScrapeRates(ctx context.Context) ([]model.InterestRate, err
 
 	rates := s.parseDepositRates(doc)
 	return rates, nil
+}
+
+// ScrapeWithBrowser scrapes interest rates from ACB using headless browser
+func (s *ACBScraper) ScrapeWithBrowser(ctx context.Context, page *rod.Page) ([]model.InterestRate, error) {
+	// Navigate to the rate page
+	if err := page.Navigate(s.RateURL); err != nil {
+		return nil, err
+	}
+
+	// Wait for page to fully load
+	if err := page.WaitLoad(); err != nil {
+		return nil, err
+	}
+
+	// Wait for network to be idle to ensure AJAX/XHR content is loaded
+	// ACB uses AJAX to load rate tables
+	_ = page.WaitRequestIdle(3*time.Second, nil, nil, nil)
+
+	// Wait for rate table to appear - try ACB-specific and common selectors
+	tableSelectors := []string{
+		".interest-rate-table",
+		".rate-table",
+		".lai-suat-table",
+		"table.table-bordered",
+		".wpthemeContentContainer table",
+		"table",
+	}
+
+	var tableFound bool
+	for _, selector := range tableSelectors {
+		el, err := page.Timeout(5 * time.Second).Element(selector)
+		if err == nil && el != nil {
+			if err := el.WaitVisible(); err == nil {
+				tableFound = true
+				break
+			}
+		}
+	}
+
+	if !tableFound {
+		// Give extra time for AJAX content to load
+		time.Sleep(3 * time.Second)
+	}
+
+	// Parse HTML with goquery
+	doc, err := ParseHTMLFromPage(page)
+	if err != nil {
+		return nil, err
+	}
+
+	return s.parseDepositRates(doc), nil
 }
 
 // parseDepositRates parses deposit rates from ACB page
@@ -102,4 +157,3 @@ func (s *ACBScraper) parseDepositRates(doc *goquery.Document) []model.InterestRa
 
 	return rates
 }
-

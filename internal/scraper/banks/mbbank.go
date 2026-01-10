@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
+	"github.com/go-rod/rod"
 	"github.com/wealthpath/backend/internal/model"
 )
 
@@ -16,24 +17,27 @@ const (
 	mbRateURL  = "https://www.mbbank.com.vn/fee"
 )
 
-// MBBankScraper scrapes interest rates from MB Bank
+// MBBankScraper scrapes interest rates from MB Bank using headless browser
 type MBBankScraper struct {
-	BaseScraper
+	BrowserBaseScraper
 }
 
 // NewMBBankScraper creates a new MB Bank scraper
 func NewMBBankScraper(client *http.Client) *MBBankScraper {
 	return &MBBankScraper{
-		BaseScraper: BaseScraper{
-			Client:    client,
-			BankCode_: mbBankCode,
-			BankName_: mbBankName,
-			RateURL:   mbRateURL,
+		BrowserBaseScraper: BrowserBaseScraper{
+			BaseScraper: BaseScraper{
+				Client:    client,
+				BankCode_: mbBankCode,
+				BankName_: mbBankName,
+				RateURL:   mbRateURL,
+			},
+			needsBrowser: true,
 		},
 	}
 }
 
-// ScrapeRates scrapes interest rates from MB Bank
+// ScrapeRates scrapes interest rates from MB Bank (fallback for non-browser scraping)
 func (s *MBBankScraper) ScrapeRates(ctx context.Context) ([]model.InterestRate, error) {
 	doc, err := s.FetchPage(ctx, s.RateURL)
 	if err != nil {
@@ -42,6 +46,56 @@ func (s *MBBankScraper) ScrapeRates(ctx context.Context) ([]model.InterestRate, 
 
 	rates := s.parseDepositRates(doc)
 	return rates, nil
+}
+
+// ScrapeWithBrowser scrapes interest rates using headless browser
+// MB Bank has bot protection with crypto challenge, requires JS execution
+func (s *MBBankScraper) ScrapeWithBrowser(ctx context.Context, page *rod.Page) ([]model.InterestRate, error) {
+	// Navigate to the rate page
+	if err := page.Navigate(s.RateURL); err != nil {
+		return nil, err
+	}
+
+	// Wait for page to fully load
+	if err := page.WaitLoad(); err != nil {
+		return nil, err
+	}
+
+	// Wait for network to be idle (crypto challenge may make requests)
+	_ = page.WaitRequestIdle(2*time.Second, nil, nil, nil)
+
+	// Wait for rate table to appear - MB Bank uses tables for interest rates
+	// Try multiple selectors as the page structure may vary
+	selectors := []string{
+		"table",
+		".rate-table",
+		"[class*='interest']",
+		"[class*='rate']",
+	}
+
+	var found bool
+	for _, selector := range selectors {
+		el, err := page.Timeout(10 * time.Second).Element(selector)
+		if err == nil && el != nil {
+			if err := el.WaitVisible(); err == nil {
+				found = true
+				break
+			}
+		}
+	}
+
+	if !found {
+		// Give extra time for JS to render content
+		time.Sleep(3 * time.Second)
+	}
+
+	// Parse the HTML from the rendered page
+	doc, err := ParseHTMLFromPage(page)
+	if err != nil {
+		return nil, err
+	}
+
+	return s.parseDepositRates(doc), nil
 }
 
 // parseDepositRates parses deposit rates from the MB Bank page
@@ -102,4 +156,3 @@ func (s *MBBankScraper) parseDepositRates(doc *goquery.Document) []model.Interes
 
 	return rates
 }
-

@@ -7,33 +7,37 @@ import (
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
+	"github.com/go-rod/rod"
 	"github.com/wealthpath/backend/internal/model"
 )
 
 const (
 	tpbankBankCode = "tpbank"
 	tpbankBankName = "TPBank"
-	tpbankRateURL  = "https://tpb.vn/lai-suat"
+	tpbankRateURL  = "https://tpb.vn/cong-cu-tinh-toan/lai-suat"
 )
 
 // TPBankScraper scrapes interest rates from TPBank
 type TPBankScraper struct {
-	BaseScraper
+	BrowserBaseScraper
 }
 
 // NewTPBankScraper creates a new TPBank scraper
 func NewTPBankScraper(client *http.Client) *TPBankScraper {
 	return &TPBankScraper{
-		BaseScraper: BaseScraper{
-			Client:    client,
-			BankCode_: tpbankBankCode,
-			BankName_: tpbankBankName,
-			RateURL:   tpbankRateURL,
+		BrowserBaseScraper: BrowserBaseScraper{
+			BaseScraper: BaseScraper{
+				Client:    client,
+				BankCode_: tpbankBankCode,
+				BankName_: tpbankBankName,
+				RateURL:   tpbankRateURL,
+			},
+			needsBrowser: true,
 		},
 	}
 }
 
-// ScrapeRates scrapes interest rates from TPBank
+// ScrapeRates scrapes interest rates from TPBank using HTTP (fallback)
 func (s *TPBankScraper) ScrapeRates(ctx context.Context) ([]model.InterestRate, error) {
 	doc, err := s.FetchPage(ctx, s.RateURL)
 	if err != nil {
@@ -42,6 +46,55 @@ func (s *TPBankScraper) ScrapeRates(ctx context.Context) ([]model.InterestRate, 
 
 	rates := s.parseDepositRates(doc)
 	return rates, nil
+}
+
+// ScrapeWithBrowser scrapes interest rates from TPBank using headless browser
+func (s *TPBankScraper) ScrapeWithBrowser(ctx context.Context, page *rod.Page) ([]model.InterestRate, error) {
+	// Navigate to the rate page
+	if err := page.Navigate(s.RateURL); err != nil {
+		return nil, err
+	}
+
+	// Wait for page to fully load (IBM WebSphere portal needs JS rendering)
+	if err := page.WaitLoad(); err != nil {
+		return nil, err
+	}
+
+	// Wait for network to be idle to ensure AJAX content is loaded
+	_ = page.WaitRequestIdle(2*time.Second, nil, nil, nil)
+
+	// Wait for rate table to appear - try common table selectors
+	tableSelectors := []string{
+		"table.interest-rate",
+		"table.rate-table",
+		".interest-rate table",
+		".lai-suat table",
+		"table",
+	}
+
+	var tableFound bool
+	for _, selector := range tableSelectors {
+		el, err := page.Timeout(5 * time.Second).Element(selector)
+		if err == nil && el != nil {
+			if err := el.WaitVisible(); err == nil {
+				tableFound = true
+				break
+			}
+		}
+	}
+
+	if !tableFound {
+		// Give extra time for dynamic content
+		time.Sleep(2 * time.Second)
+	}
+
+	// Parse HTML with goquery
+	doc, err := ParseHTMLFromPage(page)
+	if err != nil {
+		return nil, err
+	}
+
+	return s.parseDepositRates(doc), nil
 }
 
 // parseDepositRates parses deposit rates from TPBank page
@@ -96,4 +149,3 @@ func (s *TPBankScraper) parseDepositRates(doc *goquery.Document) []model.Interes
 
 	return rates
 }
-
