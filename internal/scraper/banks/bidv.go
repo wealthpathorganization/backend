@@ -2,19 +2,35 @@ package banks
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
-	"strings"
+	"regexp"
+	"strconv"
 	"time"
 
-	"github.com/PuerkitoBio/goquery"
 	"github.com/wealthpath/backend/internal/model"
 )
 
 const (
 	bidvBankCode = "bidv"
 	bidvBankName = "BIDV"
-	bidvRateURL  = "https://www.bidv.com.vn/vn/ca-nhan/san-pham-dich-vu/tien-gui/lai-suat"
+	bidvRateURL  = "https://bidv.com.vn/ServicesBIDV/InterestDetailServlet"
 )
+
+// bidvAPIResponse represents the JSON response from BIDV API
+type bidvAPIResponse struct {
+	HaNoi struct {
+		Data []bidvRateItem `json:"data"`
+	} `json:"hanoi"`
+	Status int `json:"status"`
+}
+
+type bidvRateItem struct {
+	TitleVI string `json:"title_vi"`
+	TitleEN string `json:"title_en"`
+	VND     string `json:"VND"`
+	USD     string `json:"USD"`
+}
 
 // BIDVScraper scrapes interest rates from BIDV
 type BIDVScraper struct {
@@ -33,52 +49,66 @@ func NewBIDVScraper(client *http.Client) *BIDVScraper {
 	}
 }
 
-// ScrapeRates scrapes interest rates from BIDV
+// ScrapeRates scrapes interest rates from BIDV via JSON API
 func (s *BIDVScraper) ScrapeRates(ctx context.Context) ([]model.InterestRate, error) {
-	doc, err := s.FetchPage(ctx, s.RateURL)
+	body, err := s.FetchJSON(ctx, s.RateURL)
 	if err != nil {
 		return nil, err
 	}
 
-	rates := s.parseRates(doc)
+	var apiResp bidvAPIResponse
+	if err := json.Unmarshal(body, &apiResp); err != nil {
+		return nil, err
+	}
+
+	rates := s.parseRates(apiResp)
 	return rates, nil
 }
 
-// parseRates parses the BIDV interest rate page
-func (s *BIDVScraper) parseRates(doc *goquery.Document) []model.InterestRate {
+// parseRates parses the BIDV API response
+func (s *BIDVScraper) parseRates(apiResp bidvAPIResponse) []model.InterestRate {
 	var rates []model.InterestRate
 	now := time.Now()
 	effectiveDate := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local)
 
-	// Look for interest rate tables
-	doc.Find("table").Each(func(i int, table *goquery.Selection) {
-		table.Find("tr").Each(func(j int, row *goquery.Selection) {
-			cells := row.Find("td")
-			if cells.Length() < 2 {
-				return
-			}
+	// Parse term months from Vietnamese title (e.g., "1 Tháng" -> 1)
+	termRegex := regexp.MustCompile(`(\d+)\s*(Tháng|tháng)`)
 
-			termText := strings.TrimSpace(cells.First().Text())
-			rateText := strings.TrimSpace(cells.Last().Text())
+	for _, item := range apiResp.HaNoi.Data {
+		// Skip if no VND rate
+		if item.VND == "" {
+			continue
+		}
 
-			termMonths, termLabel, err := ParseTermMonths(termText)
-			if err != nil || termMonths <= 0 {
-				return
-			}
+		// Parse rate value
+		rate, err := ParseRateFromString(item.VND)
+		if err != nil || rate <= 0 {
+			continue
+		}
 
-			rate, err := ParseRateFromString(rateText)
-			if err != nil || rate <= 0 {
-				return
-			}
+		// Parse term months
+		var termMonths int
+		var termLabel string
 
-			rates = append(rates, CreateRate(
-				bidvBankCode, bidvBankName, "deposit",
-				termMonths, termLabel, rate,
-				now, effectiveDate,
-			))
-		})
-	})
+		matches := termRegex.FindStringSubmatch(item.TitleVI)
+		if len(matches) >= 2 {
+			termMonths, _ = strconv.Atoi(matches[1])
+			termLabel = item.TitleVI
+		} else if item.TitleVI == "Không kỳ hạn" {
+			// Skip "Không kỳ hạn" (no term) - very low rate, not useful
+			continue
+		}
+
+		if termMonths <= 0 {
+			continue
+		}
+
+		rates = append(rates, CreateRate(
+			bidvBankCode, bidvBankName, "deposit",
+			termMonths, termLabel, rate,
+			now, effectiveDate,
+		))
+	}
 
 	return rates
 }
-

@@ -3,6 +3,7 @@ package scraper
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -216,4 +217,37 @@ func TestScraperRatesHaveLoanAndMortgage(t *testing.T) {
 	assert.Greater(t, productTypes["deposit"], 0, "Should have deposit rates")
 	assert.Greater(t, productTypes["loan"], 0, "Should have loan rates")
 	assert.Greater(t, productTypes["mortgage"], 0, "Should have mortgage rates")
+}
+
+func TestOrchestratorLiveScrape(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping live scrape test in short mode")
+	}
+
+	cfg := DefaultOrchestratorConfig()
+	cfg.MinDelay = 1 * time.Second
+	cfg.MaxDelay = 2 * time.Second
+	orch := NewOrchestrator(cfg, nil)
+	ctx := context.Background()
+
+	results, err := orch.ScrapeAll(ctx)
+	assert.NoError(t, err)
+
+	// Print results for debugging
+	for _, r := range results {
+		if r.Success {
+			t.Logf("✓ %s (%s): %d rates", r.BankCode, r.BankName, r.RatesScraped)
+		} else {
+			t.Logf("✗ %s (%s): %v", r.BankCode, r.BankName, r.Error)
+		}
+	}
+
+	// At least some banks should succeed
+	successCount := 0
+	for _, r := range results {
+		if r.Success {
+			successCount++
+		}
+	}
+	assert.GreaterOrEqual(t, successCount, 2, "At least 2 banks should succeed")
 }
