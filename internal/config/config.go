@@ -4,6 +4,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type Config struct {
@@ -35,6 +36,11 @@ type Config struct {
 
 	// Features
 	EnableAIChat bool
+
+	// Scraper
+	ScraperEnabled  bool
+	ScraperSchedule string        // Cron expression (e.g., "0 * * * *" for hourly)
+	ScraperTimeout  time.Duration // Timeout for complete scrape cycle
 }
 
 func Load() *Config {
@@ -67,6 +73,11 @@ func Load() *Config {
 
 		// Features
 		EnableAIChat: getBoolEnv("ENABLE_AI_CHAT", true),
+
+		// Scraper
+		ScraperEnabled:  getBoolEnv("SCRAPER_ENABLED", true),
+		ScraperSchedule: getEnv("SCRAPER_SCHEDULE", "0 * * * *"), // Default: hourly at minute 0
+		ScraperTimeout:  getDurationEnv("SCRAPER_TIMEOUT", 5*time.Minute),
 	}
 }
 
@@ -89,6 +100,15 @@ func getBoolEnv(key string, defaultValue bool) bool {
 	if value := os.Getenv(key); value != "" {
 		if b, err := strconv.ParseBool(value); err == nil {
 			return b
+		}
+	}
+	return defaultValue
+}
+
+func getDurationEnv(key string, defaultValue time.Duration) time.Duration {
+	if value := os.Getenv(key); value != "" {
+		if d, err := time.ParseDuration(value); err == nil {
+			return d
 		}
 	}
 	return defaultValue

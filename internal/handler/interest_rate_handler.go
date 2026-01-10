@@ -3,6 +3,7 @@ package handler
 import (
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/wealthpath/backend/internal/service"
 )
@@ -248,4 +249,18 @@ func (h *InterestRateHandler) ScrapeRates(w http.ResponseWriter, r *http.Request
 		"message": "Interest rates scraped successfully",
 		"count":   count,
 	})
+}
+
+// GetScraperHealth godoc
+// @Summary Get scraper health status
+// @Description Get the health status of the interest rate scraper
+// @Tags interest-rates
+// @Accept json
+// @Produce json
+// @Success 200 {object} scraper.HealthStatus
+// @Router /api/interest-rates/scraper-health [get]
+func (h *InterestRateHandler) GetScraperHealth(w http.ResponseWriter, r *http.Request) {
+	// For now, use zero time for next run - can be enhanced to pass scheduler info
+	health := h.service.GetScraperHealth(time.Time{})
+	respondJSON(w, http.StatusOK, health)
 }

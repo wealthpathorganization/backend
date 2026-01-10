@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/shopspring/decimal"
@@ -13,30 +14,47 @@ import (
 
 // InterestRateService handles interest rate operations
 type InterestRateService struct {
-	repo    repository.InterestRateRepository
-	scraper *scraper.Scraper
+	repo         repository.InterestRateRepository
+	orchestrator *scraper.Orchestrator
 }
 
 // NewInterestRateService creates a new interest rate service
 func NewInterestRateService(repo repository.InterestRateRepository) *InterestRateService {
 	return &InterestRateService{
-		repo:    repo,
-		scraper: scraper.NewScraper(),
+		repo:         repo,
+		orchestrator: scraper.NewOrchestrator(scraper.DefaultOrchestratorConfig(), slog.Default()),
 	}
 }
 
 // ScrapeAndUpdateRates scrapes rates from all banks and updates the database
 func (s *InterestRateService) ScrapeAndUpdateRates(ctx context.Context) (int, error) {
-	rates, err := s.scraper.ScrapeAll(ctx)
+	results, err := s.orchestrator.ScrapeAll(ctx)
 	if err != nil {
 		return 0, fmt.Errorf("scrape rates: %w", err)
 	}
 
-	if err := s.BulkUpsertRates(ctx, rates); err != nil {
+	// Collect all rates from successful scrapes
+	var allRates []model.InterestRate
+	for _, result := range results {
+		if result.Success {
+			allRates = append(allRates, result.Rates...)
+		}
+	}
+
+	if len(allRates) == 0 {
+		return 0, fmt.Errorf("no rates scraped successfully")
+	}
+
+	if err := s.BulkUpsertRates(ctx, allRates); err != nil {
 		return 0, fmt.Errorf("upsert rates: %w", err)
 	}
 
-	return len(rates), nil
+	return len(allRates), nil
+}
+
+// GetScraperHealth returns the health status of the scraper
+func (s *InterestRateService) GetScraperHealth(nextRunTime time.Time) scraper.HealthStatus {
+	return s.orchestrator.GetHealthStatus(nextRunTime)
 }
 
 // ListRates returns interest rates with optional filters
