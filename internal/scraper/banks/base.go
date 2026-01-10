@@ -52,10 +52,11 @@ func (b *BaseScraper) FetchPage(ctx context.Context, url string) (*goquery.Docum
 	}
 
 	// Set headers to mimic a real browser
+	// Note: Don't set Accept-Encoding manually - let Go's http client handle it automatically
+	// Setting "br" (Brotli) can cause issues as Go doesn't decompress it by default
 	req.Header.Set("User-Agent", GetRandomUserAgent())
 	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8")
 	req.Header.Set("Accept-Language", "vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7")
-	req.Header.Set("Accept-Encoding", "gzip, deflate, br")
 	req.Header.Set("Connection", "keep-alive")
 	req.Header.Set("Cache-Control", "max-age=0")
 

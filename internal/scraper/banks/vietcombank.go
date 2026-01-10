@@ -2,7 +2,10 @@ package banks
 
 import (
 	"context"
+	"encoding/json"
+	"html"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 
@@ -15,6 +18,22 @@ const (
 	vcbBankName = "Vietcombank"
 	vcbRateURL  = "https://www.vietcombank.com.vn/vi-VN/KHCN/Cong-cu-Tien-ich/KHCN---Lai-suat"
 )
+
+// vcbRateData represents the JSON structure embedded in VCB page
+type vcbRateData struct {
+	Count       int           `json:"Count"`
+	UpdatedDate string        `json:"UpdatedDate"`
+	AccountType string        `json:"AccountType"`
+	Data        []vcbRateItem `json:"Data"`
+}
+
+type vcbRateItem struct {
+	TenorType    string   `json:"tenorType"`
+	Tenor        string   `json:"tenor"`
+	CurrencyCode string   `json:"currencyCode"`
+	TenorDisplay string   `json:"tenorDisplay"`
+	Rates        *float64 `json:"rates"`
+}
 
 // VietcombankScraper scrapes interest rates from Vietcombank
 type VietcombankScraper struct {
@@ -50,62 +69,77 @@ func (s *VietcombankScraper) parseDepositRates(doc *goquery.Document) []model.In
 	now := time.Now()
 	effectiveDate := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local)
 
-	// VCB displays rates in tables with class "table-interest-rate" or similar
-	// Look for tables containing interest rate data
-	doc.Find("table").Each(func(i int, table *goquery.Selection) {
-		// Check if this table contains interest rate headers
-		headerText := table.Find("thead, th").Text()
-		if !strings.Contains(strings.ToLower(headerText), "lãi suất") &&
-			!strings.Contains(strings.ToLower(headerText), "kỳ hạn") {
-			return
+	// VCB embeds rate data as JSON in a hidden input field
+	jsonData := doc.Find("input#currentDataInterestRate").AttrOr("value", "")
+	if jsonData == "" {
+		return rates
+	}
+
+	// Unescape HTML entities in JSON
+	jsonData = html.UnescapeString(jsonData)
+
+	var rateData vcbRateData
+	if err := json.Unmarshal([]byte(jsonData), &rateData); err != nil {
+		return rates
+	}
+
+	// Parse term months from tenor string (e.g., "1-months" -> 1)
+	termRegex := regexp.MustCompile(`(\d+)-?(months?|days?)`)
+
+	for _, item := range rateData.Data {
+		// Only process VND savings rates
+		if item.CurrencyCode != "VND" || item.TenorType != "Savings" {
+			continue
 		}
 
-		// Parse rows
-		table.Find("tbody tr, tr").Each(func(j int, row *goquery.Selection) {
-			cells := row.Find("td")
-			if cells.Length() < 2 {
-				return
+		if item.Rates == nil || *item.Rates <= 0 {
+			continue
+		}
+
+		// Parse term months
+		matches := termRegex.FindStringSubmatch(strings.ToLower(item.Tenor))
+		if len(matches) < 3 {
+			continue
+		}
+
+		var termMonths int
+		termValue := 0
+		for _, c := range matches[1] {
+			termValue = termValue*10 + int(c-'0')
+		}
+
+		unit := matches[2]
+		if strings.HasPrefix(unit, "day") {
+			// Skip day-based terms or convert (7 days ~ 0.25 months)
+			continue
+		}
+		termMonths = termValue
+
+		if termMonths <= 0 {
+			continue
+		}
+
+		// Rate is in decimal form (0.021 = 2.1%)
+		rate := *item.Rates * 100
+
+		// Skip duplicate rates
+		isDuplicate := false
+		for _, r := range rates {
+			if r.TermMonths == termMonths && r.Rate.InexactFloat64() == rate {
+				isDuplicate = true
+				break
 			}
+		}
+		if isDuplicate {
+			continue
+		}
 
-			// First cell is usually the term
-			termText := strings.TrimSpace(cells.First().Text())
-			termMonths, termLabel, err := ParseTermMonths(termText)
-			if err != nil || termMonths <= 0 {
-				return
-			}
-
-			// Look for rate values in subsequent cells
-			cells.Each(func(k int, cell *goquery.Selection) {
-				if k == 0 {
-					return // Skip term cell
-				}
-
-				rateText := strings.TrimSpace(cell.Text())
-				rate, err := ParseRateFromString(rateText)
-				if err != nil || rate <= 0 {
-					return
-				}
-
-				// Skip duplicate rates
-				isDuplicate := false
-				for _, r := range rates {
-					if r.TermMonths == termMonths && r.Rate.InexactFloat64() == rate {
-						isDuplicate = true
-						break
-					}
-				}
-				if isDuplicate {
-					return
-				}
-
-				rates = append(rates, CreateRate(
-					vcbBankCode, vcbBankName, "deposit",
-					termMonths, termLabel, rate,
-					now, effectiveDate,
-				))
-			})
-		})
-	})
+		rates = append(rates, CreateRate(
+			vcbBankCode, vcbBankName, "deposit",
+			termMonths, item.TenorDisplay, rate,
+			now, effectiveDate,
+		))
+	}
 
 	return rates
 }
