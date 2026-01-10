@@ -25,9 +25,16 @@ clean:
 test:
 	go test -v ./...
 
-# Run migrations
+# Run migrations (requires psql locally)
 migrate:
 	psql -d wealthpath -f migrations/001_initial.sql
+
+# Run migrations using Docker (for local development)
+migrate-local:
+	@for f in migrations/db/migration/V*.sql; do \
+		echo "Running $$f..."; \
+		docker exec -i wealthpathorganization-postgres-1 psql -U wealthpath -d wealthpath < $$f; \
+	done
 
 # Download dependencies
 deps:

@@ -1,20 +1,27 @@
 package main
 
 import (
+	"context"
 	"log"
+	"log/slog"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
+	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
 	httpSwagger "github.com/swaggo/http-swagger/v2"
 
 	_ "github.com/wealthpath/backend/docs"
+	"github.com/wealthpath/backend/internal/config"
 	"github.com/wealthpath/backend/internal/handler"
 	"github.com/wealthpath/backend/internal/repository"
+	"github.com/wealthpath/backend/internal/scheduler"
 	"github.com/wealthpath/backend/internal/service"
 )
 
@@ -38,7 +45,16 @@ import (
 // @description Type "Bearer" followed by a space and JWT token.
 
 func main() {
-	dbURL := os.Getenv("DATABASE_URL")
+	// Load configuration
+	cfg := config.Load()
+
+	// Setup structured logger
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
+		Level: slog.LevelInfo,
+	}))
+	slog.SetDefault(logger)
+
+	dbURL := cfg.DatabaseURL
 	if dbURL == "" {
 		dbURL = "postgres://localhost:5432/wealthpath?sslmode=disable"
 	}
@@ -68,6 +84,8 @@ func main() {
 	dashboardService := service.NewDashboardService(transactionRepo, budgetRepo, savingsRepo, debtRepo)
 	aiService := service.NewAIService(transactionService, budgetService, savingsService)
 	interestRateService := service.NewInterestRateService(interestRateRepo)
+	reportRepo := repository.NewReportRepository(db)
+	reportService := service.NewReportService(reportRepo)
 
 	// Initialize handlers
 	authHandler := handler.NewAuthHandler(userService)
@@ -80,6 +98,11 @@ func main() {
 	dashboardHandler := handler.NewDashboardHandler(dashboardService)
 	aiHandler := handler.NewAIHandler(aiService)
 	interestRateHandler := handler.NewInterestRateHandler(interestRateService)
+	reportHandler := handler.NewReportHandler(reportService)
+	calendarHandler := handler.NewCalendarHandler(recurringService, func(ctx context.Context, userID uuid.UUID) string {
+		currency, _ := reportRepo.GetUserCurrency(ctx, userID)
+		return currency
+	})
 
 	r := chi.NewRouter()
 
@@ -134,8 +157,9 @@ func main() {
 	r.Get("/api/interest-rates/compare", interestRateHandler.CompareRates)
 	r.Get("/api/interest-rates/banks", interestRateHandler.GetBanks)
 	r.Get("/api/interest-rates/history", interestRateHandler.GetHistory)
-	r.Post("/api/interest-rates/seed", interestRateHandler.SeedRates)     // Admin: seed sample data
-	r.Post("/api/interest-rates/scrape", interestRateHandler.ScrapeRates) // Admin: scrape live rates
+	r.Get("/api/interest-rates/scraper-health", interestRateHandler.GetScraperHealth) // Scraper health status
+	r.Post("/api/interest-rates/seed", interestRateHandler.SeedRates)                 // Admin: seed sample data
+	r.Post("/api/interest-rates/scrape", interestRateHandler.ScrapeRates)             // Admin: scrape live rates
 
 	// Protected routes
 	r.Group(func(r chi.Router) {
@@ -185,23 +209,74 @@ func main() {
 		r.Get("/api/recurring", recurringHandler.List)
 		r.Post("/api/recurring", recurringHandler.Create)
 		r.Get("/api/recurring/upcoming", recurringHandler.Upcoming)
+		r.Get("/api/recurring/calendar", calendarHandler.GetCalendar)
 		r.Get("/api/recurring/{id}", recurringHandler.Get)
 		r.Put("/api/recurring/{id}", recurringHandler.Update)
 		r.Delete("/api/recurring/{id}", recurringHandler.Delete)
 		r.Post("/api/recurring/{id}/pause", recurringHandler.Pause)
 		r.Post("/api/recurring/{id}/resume", recurringHandler.Resume)
 
+		// Reports
+		r.Get("/api/reports/monthly", reportHandler.GetMonthlyReport)
+		r.Get("/api/reports/category-trends", reportHandler.GetCategoryTrends)
+
 		// AI Chat
 		r.Post("/api/chat", aiHandler.Chat)
 	})
 
-	port := os.Getenv("PORT")
+	// Initialize and start scheduler for interest rate scraping
+	var scraperScheduler *scheduler.Scheduler
+	if cfg.ScraperEnabled {
+		schedCfg := scheduler.Config{
+			Schedule: cfg.ScraperSchedule,
+			Timeout:  cfg.ScraperTimeout,
+			Enabled:  cfg.ScraperEnabled,
+		}
+		scraperScheduler = scheduler.New(schedCfg, interestRateService, logger)
+		if err := scraperScheduler.Start(); err != nil {
+			logger.Error("Failed to start scraper scheduler", slog.String("error", err.Error()))
+		} else {
+			logger.Info("Scraper scheduler started",
+				slog.String("schedule", cfg.ScraperSchedule),
+				slog.Duration("timeout", cfg.ScraperTimeout),
+			)
+		}
+	}
+
+	port := cfg.Port
 	if port == "" {
 		port = "8080"
 	}
 
+	// Create server
+	server := &http.Server{
+		Addr:    ":" + port,
+		Handler: r,
+	}
+
+	// Handle graceful shutdown
+	go func() {
+		sigChan := make(chan os.Signal, 1)
+		signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+		<-sigChan
+
+		logger.Info("Shutting down server...")
+
+		// Stop scheduler first
+		if scraperScheduler != nil {
+			ctx := scraperScheduler.Stop()
+			<-ctx.Done()
+			logger.Info("Scheduler stopped")
+		}
+
+		// Shutdown HTTP server
+		if err := server.Shutdown(context.Background()); err != nil {
+			logger.Error("Server shutdown error", slog.String("error", err.Error()))
+		}
+	}()
+
 	log.Printf("Server starting on port %s", port)
-	if err := http.ListenAndServe(":"+port, r); err != nil {
+	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Printf("Server failed: %v", err)
 	}
 }

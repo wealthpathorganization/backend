@@ -33,3 +33,7 @@ dist/
 .DS_Store
 Thumbs.db
 
+
+# Test artifacts
+rates.json
+test-results/
