@@ -97,15 +97,23 @@ jobs:
     if: success()
     
     steps:
-      - name: Trigger deployment (optional)
+      - name: Trigger deployment
+        env:
+          DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
         run: |
           echo "Backend images pushed successfully"
           echo "Backend: ${{ env.BACKEND_IMAGE }}:${{ github.sha }}"
           echo "Migrations: ${{ env.MIGRATIONS_IMAGE }}:${{ github.sha }}"
-          # Optionally trigger infra-ansible deployment via repository_dispatch
-          # curl -X POST \
-          #   -H "Authorization: token ${{ secrets.DEPLOY_TOKEN }}" \
-          #   -H "Accept: application/vnd.github.v3+json" \
-          #   https://api.github.com/repos/wealthpathorganization/infra-ansible/dispatches \
-          #   -d '{"event_type":"deploy"}'
+
+          if [ -n "$DEPLOY_TOKEN" ]; then
+            echo "Triggering deployment to infra-ansible..."
+            curl -X POST \
+              -H "Authorization: token $DEPLOY_TOKEN" \
+              -H "Accept: application/vnd.github.v3+json" \
+              https://api.github.com/repos/wealthpathorganization/infra-ansible/dispatches \
+              -d '{"event_type":"deploy","client_payload":{"source":"backend","sha":"${{ github.sha }}"}}'
+            echo "Deployment triggered!"
+          else
+            echo "DEPLOY_TOKEN not set, skipping auto-deploy"
+          fi
 
