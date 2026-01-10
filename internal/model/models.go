@@ -182,13 +182,13 @@ type RecurringTransaction struct {
 
 // UpcomingBill is a simplified view for dashboard widget
 type UpcomingBill struct {
-	ID          uuid.UUID       `json:"id"`
-	Description string          `json:"description"`
-	Amount      decimal.Decimal `json:"amount"`
-	Currency    string          `json:"currency"`
-	Category    string          `json:"category"`
-	DueDate     time.Time       `json:"dueDate"`
-	Type        TransactionType `json:"type"`
+	ID          uuid.UUID       `db:"id" json:"id"`
+	Description string          `db:"description" json:"description"`
+	Amount      decimal.Decimal `db:"amount" json:"amount"`
+	Currency    string          `db:"currency" json:"currency"`
+	Category    string          `db:"category" json:"category"`
+	DueDate     time.Time       `db:"due_date" json:"dueDate"`
+	Type        TransactionType `db:"type" json:"type"`
 }
 
 // Categories
