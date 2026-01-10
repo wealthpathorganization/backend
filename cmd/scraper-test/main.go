@@ -32,7 +32,7 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
-	fmt.Println("\n=== Starting Scrape Test ===\n")
+	fmt.Println("\n=== Starting Scrape Test ===")
 
 	results, err := orch.ScrapeAll(ctx)
 	if err != nil {
@@ -40,7 +40,7 @@ func main() {
 		return
 	}
 
-	fmt.Println("\n=== Scrape Results ===\n")
+	fmt.Println("\n=== Scrape Results ===")
 
 	var totalRates int
 	for _, r := range results {
