@@ -37,15 +37,10 @@ func NewVietcombankScraper(client *http.Client) *VietcombankScraper {
 func (s *VietcombankScraper) ScrapeRates(ctx context.Context) ([]model.InterestRate, error) {
 	doc, err := s.FetchPage(ctx, s.RateURL)
 	if err != nil {
-		// Return fallback rates on error
-		return s.getFallbackRates(), nil
+		return nil, err
 	}
 
 	rates := s.parseDepositRates(doc)
-	if len(rates) == 0 {
-		return s.getFallbackRates(), nil
-	}
-
 	return rates, nil
 }
 
@@ -115,30 +110,3 @@ func (s *VietcombankScraper) parseDepositRates(doc *goquery.Document) []model.In
 	return rates
 }
 
-// getFallbackRates returns hardcoded fallback rates
-func (s *VietcombankScraper) getFallbackRates() []model.InterestRate {
-	now := time.Now()
-	ed := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.Local)
-	bc, bn := vcbBankCode, vcbBankName
-
-	return []model.InterestRate{
-		// Deposit rates (as of 2024)
-		CreateRate(bc, bn, "deposit", 1, "1 tháng", 1.7, now, ed),
-		CreateRate(bc, bn, "deposit", 3, "3 tháng", 2.0, now, ed),
-		CreateRate(bc, bn, "deposit", 6, "6 tháng", 3.0, now, ed),
-		CreateRate(bc, bn, "deposit", 9, "9 tháng", 3.0, now, ed),
-		CreateRate(bc, bn, "deposit", 12, "12 tháng", 4.7, now, ed),
-		CreateRate(bc, bn, "deposit", 13, "13 tháng", 4.7, now, ed),
-		CreateRate(bc, bn, "deposit", 18, "18 tháng", 4.7, now, ed),
-		CreateRate(bc, bn, "deposit", 24, "24 tháng", 4.7, now, ed),
-		CreateRate(bc, bn, "deposit", 36, "36 tháng", 4.7, now, ed),
-		// Loan rates
-		CreateRate(bc, bn, "loan", 12, "12 tháng", 8.5, now, ed),
-		CreateRate(bc, bn, "loan", 24, "24 tháng", 9.0, now, ed),
-		CreateRate(bc, bn, "loan", 60, "60 tháng", 9.5, now, ed),
-		// Mortgage rates
-		CreateRate(bc, bn, "mortgage", 120, "10 năm", 7.5, now, ed),
-		CreateRate(bc, bn, "mortgage", 180, "15 năm", 7.8, now, ed),
-		CreateRate(bc, bn, "mortgage", 240, "20 năm", 8.0, now, ed),
-	}
-}
