@@ -190,7 +190,7 @@ func TestUserService_Login(t *testing.T) {
 			},
 			setupMock: func(m *MockUserRepo) {
 				// bcrypt hash for "password123"
-				hash := "$2a$10$kBZ2G.6fNOhP0s8pKpD/euRqtMBSS.Q7y.lhsF2mMhTbh1J5yOi16"
+				hash := "$2a$10$dseEMkGltX2F0l8M5kC.Y.Dkcb5BeVBjUx58w8KgSQbYGfgu0gRG."
 				m.On("GetByEmail", mock.Anything, "test@example.com").Return(&model.User{
 					ID:           uuid.New(),
 					Email:        "test@example.com",
@@ -504,4 +504,289 @@ func TestTokenRoundtrip(t *testing.T) {
 	parsedID, err := ValidateToken(token)
 	assert.NoError(t, err)
 	assert.Equal(t, userID, parsedID)
+}
+
+// ============ REFRESH TOKEN TESTS ============
+
+// MockRefreshTokenRepo implements RefreshTokenRepositoryInterface for testing
+type MockRefreshTokenRepo struct {
+	mock.Mock
+}
+
+func (m *MockRefreshTokenRepo) Create(ctx context.Context, token *model.RefreshToken) error {
+	args := m.Called(ctx, token)
+	if token.ID == uuid.Nil {
+		token.ID = uuid.New()
+	}
+	return args.Error(0)
+}
+
+func (m *MockRefreshTokenRepo) FindByTokenHash(ctx context.Context, tokenHash string) (*model.RefreshToken, error) {
+	args := m.Called(ctx, tokenHash)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*model.RefreshToken), args.Error(1)
+}
+
+func (m *MockRefreshTokenRepo) FindByID(ctx context.Context, id uuid.UUID) (*model.RefreshToken, error) {
+	args := m.Called(ctx, id)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*model.RefreshToken), args.Error(1)
+}
+
+func (m *MockRefreshTokenRepo) FindActiveByUserID(ctx context.Context, userID uuid.UUID) ([]*model.RefreshToken, error) {
+	args := m.Called(ctx, userID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*model.RefreshToken), args.Error(1)
+}
+
+func (m *MockRefreshTokenRepo) UpdateLastUsed(ctx context.Context, id uuid.UUID) error {
+	args := m.Called(ctx, id)
+	return args.Error(0)
+}
+
+func (m *MockRefreshTokenRepo) RevokeByID(ctx context.Context, id uuid.UUID, reason string) error {
+	args := m.Called(ctx, id, reason)
+	return args.Error(0)
+}
+
+func (m *MockRefreshTokenRepo) RevokeByTokenHash(ctx context.Context, tokenHash, reason string) error {
+	args := m.Called(ctx, tokenHash, reason)
+	return args.Error(0)
+}
+
+func (m *MockRefreshTokenRepo) RevokeByUserID(ctx context.Context, userID uuid.UUID, reason string) (int64, error) {
+	args := m.Called(ctx, userID, reason)
+	return args.Get(0).(int64), args.Error(1)
+}
+
+func (m *MockRefreshTokenRepo) RevokeByUserIDExcept(ctx context.Context, userID uuid.UUID, exceptID uuid.UUID, reason string) (int64, error) {
+	args := m.Called(ctx, userID, exceptID, reason)
+	return args.Get(0).(int64), args.Error(1)
+}
+
+func (m *MockRefreshTokenRepo) DeleteExpired(ctx context.Context) (int64, error) {
+	args := m.Called(ctx)
+	return args.Get(0).(int64), args.Error(1)
+}
+
+func TestGenerateRefreshTokenString(t *testing.T) {
+	token1, err := generateRefreshTokenString()
+	assert.NoError(t, err)
+	assert.NotEmpty(t, token1)
+	assert.Equal(t, 64, len(token1)) // 32 bytes = 64 hex characters
+
+	// Tokens should be unique
+	token2, err := generateRefreshTokenString()
+	assert.NoError(t, err)
+	assert.NotEqual(t, token1, token2)
+}
+
+func TestHashRefreshToken(t *testing.T) {
+	token := "testtoken123"
+	hash1 := hashRefreshToken(token)
+	hash2 := hashRefreshToken(token)
+
+	// Same input should produce same hash
+	assert.Equal(t, hash1, hash2)
+
+	// Hash should be 64 hex characters (SHA-256 = 32 bytes)
+	assert.Equal(t, 64, len(hash1))
+
+	// Different inputs should produce different hashes
+	hash3 := hashRefreshToken("differenttoken")
+	assert.NotEqual(t, hash1, hash3)
+}
+
+func TestUserService_RegisterWithRefreshTokens(t *testing.T) {
+	t.Parallel()
+
+	mockUserRepo := new(MockUserRepo)
+	mockRefreshRepo := new(MockRefreshTokenRepo)
+	service := NewUserServiceWithRefreshTokens(mockUserRepo, mockRefreshRepo)
+
+	input := RegisterInput{
+		Email:      "test@example.com",
+		Password:   "password123",
+		Name:       "Test User",
+		RememberMe: true,
+	}
+
+	mockUserRepo.On("EmailExists", mock.Anything, "test@example.com").Return(false, nil)
+	mockUserRepo.On("Create", mock.Anything, mock.AnythingOfType("*model.User")).Return(nil)
+	mockRefreshRepo.On("Create", mock.Anything, mock.AnythingOfType("*model.RefreshToken")).Return(nil)
+
+	resp, err := service.Register(context.Background(), input)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, resp)
+	assert.NotEmpty(t, resp.Token)
+	assert.NotEmpty(t, resp.RefreshToken)
+	assert.Equal(t, int64(AccessTokenExpiry.Seconds()), resp.ExpiresIn)
+	mockUserRepo.AssertExpectations(t)
+	mockRefreshRepo.AssertExpectations(t)
+}
+
+func TestUserService_LoginWithRefreshTokens(t *testing.T) {
+	t.Parallel()
+
+	mockUserRepo := new(MockUserRepo)
+	mockRefreshRepo := new(MockRefreshTokenRepo)
+	service := NewUserServiceWithRefreshTokens(mockUserRepo, mockRefreshRepo)
+
+	// bcrypt hash for "password123"
+	hash := "$2a$10$dseEMkGltX2F0l8M5kC.Y.Dkcb5BeVBjUx58w8KgSQbYGfgu0gRG."
+	userID := uuid.New()
+
+	input := LoginInput{
+		Email:      "test@example.com",
+		Password:   "password123",
+		RememberMe: false,
+	}
+
+	mockUserRepo.On("GetByEmail", mock.Anything, "test@example.com").Return(&model.User{
+		ID:           userID,
+		Email:        "test@example.com",
+		PasswordHash: &hash,
+		TOTPEnabled:  false,
+	}, nil)
+	mockRefreshRepo.On("Create", mock.Anything, mock.AnythingOfType("*model.RefreshToken")).Return(nil)
+
+	resp, err := service.Login(context.Background(), input)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, resp)
+	assert.NotEmpty(t, resp.Token)
+	assert.NotEmpty(t, resp.RefreshToken)
+	mockUserRepo.AssertExpectations(t)
+	mockRefreshRepo.AssertExpectations(t)
+}
+
+func TestUserService_GetActiveSessions(t *testing.T) {
+	t.Parallel()
+
+	mockUserRepo := new(MockUserRepo)
+	mockRefreshRepo := new(MockRefreshTokenRepo)
+	service := NewUserServiceWithRefreshTokens(mockUserRepo, mockRefreshRepo)
+
+	userID := uuid.New()
+	tokens := []*model.RefreshToken{
+		{ID: uuid.New(), UserID: userID, TokenHash: "hash1"},
+		{ID: uuid.New(), UserID: userID, TokenHash: "hash2"},
+	}
+
+	mockRefreshRepo.On("FindActiveByUserID", mock.Anything, userID).Return(tokens, nil)
+
+	sessions, err := service.GetActiveSessions(context.Background(), userID)
+
+	assert.NoError(t, err)
+	assert.Len(t, sessions, 2)
+	mockRefreshRepo.AssertExpectations(t)
+}
+
+func TestUserService_RevokeAllUserTokens(t *testing.T) {
+	t.Parallel()
+
+	mockUserRepo := new(MockUserRepo)
+	mockRefreshRepo := new(MockRefreshTokenRepo)
+	service := NewUserServiceWithRefreshTokens(mockUserRepo, mockRefreshRepo)
+
+	userID := uuid.New()
+
+	mockRefreshRepo.On("RevokeByUserID", mock.Anything, userID, "sign_out_everywhere").Return(int64(3), nil)
+
+	count, err := service.RevokeAllUserTokens(context.Background(), userID, "sign_out_everywhere")
+
+	assert.NoError(t, err)
+	assert.Equal(t, int64(3), count)
+	mockRefreshRepo.AssertExpectations(t)
+}
+
+func TestUserService_RevokeSession(t *testing.T) {
+	t.Parallel()
+
+	mockUserRepo := new(MockUserRepo)
+	mockRefreshRepo := new(MockRefreshTokenRepo)
+	service := NewUserServiceWithRefreshTokens(mockUserRepo, mockRefreshRepo)
+
+	userID := uuid.New()
+	sessionID := uuid.New()
+
+	mockRefreshRepo.On("FindByID", mock.Anything, sessionID).Return(&model.RefreshToken{
+		ID:     sessionID,
+		UserID: userID,
+	}, nil)
+	mockRefreshRepo.On("RevokeByID", mock.Anything, sessionID, "user_revoked").Return(nil)
+
+	err := service.RevokeSession(context.Background(), userID, sessionID, "user_revoked")
+
+	assert.NoError(t, err)
+	mockRefreshRepo.AssertExpectations(t)
+}
+
+func TestUserService_RevokeSession_WrongUser(t *testing.T) {
+	t.Parallel()
+
+	mockUserRepo := new(MockUserRepo)
+	mockRefreshRepo := new(MockRefreshTokenRepo)
+	service := NewUserServiceWithRefreshTokens(mockUserRepo, mockRefreshRepo)
+
+	userID := uuid.New()
+	otherUserID := uuid.New()
+	sessionID := uuid.New()
+
+	mockRefreshRepo.On("FindByID", mock.Anything, sessionID).Return(&model.RefreshToken{
+		ID:     sessionID,
+		UserID: otherUserID, // Different user
+	}, nil)
+
+	err := service.RevokeSession(context.Background(), userID, sessionID, "user_revoked")
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "session does not belong to user")
+	mockRefreshRepo.AssertExpectations(t)
+}
+
+func TestTempTokenWithRememberMe(t *testing.T) {
+	userID := uuid.New()
+
+	// Test with rememberMe = true
+	token1, err := generateTempTokenWithRememberMe(userID, true)
+	assert.NoError(t, err)
+	assert.NotEmpty(t, token1)
+
+	parsedID, rememberMe, err := ValidateTempTokenWithRememberMe(token1)
+	assert.NoError(t, err)
+	assert.Equal(t, userID, parsedID)
+	assert.True(t, rememberMe)
+
+	// Test with rememberMe = false
+	token2, err := generateTempTokenWithRememberMe(userID, false)
+	assert.NoError(t, err)
+
+	parsedID, rememberMe, err = ValidateTempTokenWithRememberMe(token2)
+	assert.NoError(t, err)
+	assert.Equal(t, userID, parsedID)
+	assert.False(t, rememberMe)
+}
+
+func TestValidateTempTokenWithRememberMe_InvalidToken(t *testing.T) {
+	_, _, err := ValidateTempTokenWithRememberMe("invalid.token.here")
+	assert.Error(t, err)
+}
+
+func TestAccessTokenExpiry(t *testing.T) {
+	// Verify the access token expiry constant
+	assert.Equal(t, 15*60, int(AccessTokenExpiry.Seconds()))
+}
+
+func TestRefreshTokenExpiry(t *testing.T) {
+	// Verify the refresh token expiry constants
+	assert.Equal(t, 7*24*60*60, int(RefreshTokenExpiry.Seconds()))
+	assert.Equal(t, 30*24*60*60, int(RememberMeRefreshExpiry.Seconds()))
 }

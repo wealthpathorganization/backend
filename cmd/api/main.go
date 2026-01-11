@@ -73,9 +73,10 @@ func main() {
 	debtRepo := repository.NewDebtRepository(db)
 	recurringRepo := repository.NewRecurringRepository(db)
 	interestRateRepo := repository.NewInterestRateRepository(db)
+	refreshTokenRepo := repository.NewRefreshTokenRepository(db)
 
 	// Initialize services
-	userService := service.NewUserService(userRepo)
+	userService := service.NewUserServiceWithRefreshTokens(userRepo, refreshTokenRepo)
 	transactionService := service.NewTransactionService(transactionRepo)
 	budgetService := service.NewBudgetService(budgetRepo)
 	savingsService := service.NewSavingsGoalService(savingsRepo)
@@ -97,7 +98,8 @@ func main() {
 	pushService := service.NewPushNotificationService(pushRepo, cfg)
 
 	// Initialize handlers
-	authHandler := handler.NewAuthHandler(userService)
+	authHandler := handler.NewAuthHandlerWithConfig(userService, cfg)
+	sessionHandler := handler.NewSessionHandler(userService)
 	oauthHandler := handler.NewOAuthHandler(userService)
 	totpHandler := handler.NewTOTPHandler(totpService)
 	transactionHandler := handler.NewTransactionHandler(transactionService)
@@ -155,6 +157,8 @@ func main() {
 	r.Post("/api/auth/login", authHandler.Login)
 	r.Post("/api/auth/login/2fa", authHandler.LoginWithTOTP)
 	r.Post("/api/auth/login/2fa/backup", authHandler.LoginWithBackupCode)
+	r.Post("/api/auth/refresh", authHandler.RefreshAccessToken)  // Cookie-based refresh (public)
+	r.Post("/api/auth/logout", authHandler.Logout)               // Logout (public)
 
 	// OAuth routes - supports facebook, google, etc.
 	r.Get("/api/auth/{provider}", oauthHandler.OAuthLogin)
@@ -181,7 +185,12 @@ func main() {
 		// Current user
 		r.Get("/api/auth/me", authHandler.Me)
 		r.Put("/api/auth/settings", authHandler.UpdateSettings)
-		r.Post("/api/auth/refresh", authHandler.RefreshToken)
+		r.Post("/api/auth/refresh-legacy", authHandler.RefreshToken)  // Legacy refresh (requires auth)
+
+		// Session management
+		r.Get("/api/auth/sessions", sessionHandler.ListSessions)
+		r.Delete("/api/auth/sessions/{id}", sessionHandler.RevokeSession)
+		r.Delete("/api/auth/sessions", sessionHandler.RevokeAllSessions)
 
 		// 2FA management
 		r.Post("/api/auth/2fa/setup", totpHandler.Setup)

@@ -7,6 +7,14 @@ import (
 	"time"
 )
 
+// CookieConfig holds settings for HTTP cookies (refresh tokens).
+type CookieConfig struct {
+	Domain   string // Cookie domain (empty = current domain)
+	Secure   bool   // Require HTTPS
+	SameSite string // "Strict", "Lax", or "None"
+	Path     string // Cookie path
+}
+
 type Config struct {
 	// Server
 	Port string
@@ -17,6 +25,9 @@ type Config struct {
 
 	// Auth
 	JWTSecret string
+
+	// Cookie settings for refresh tokens
+	Cookie CookieConfig
 
 	// CORS
 	AllowedOrigins []string
@@ -49,16 +60,27 @@ type Config struct {
 }
 
 func Load() *Config {
+	env := getEnv("ENV", "development")
+	isProduction := env == "production"
+
 	return &Config{
 		// Server
 		Port: getEnv("PORT", "8080"),
-		Env:  getEnv("ENV", "development"),
+		Env:  env,
 
 		// Database
 		DatabaseURL: getEnv("DATABASE_URL", "postgres://localhost:5432/wealthpath?sslmode=disable"),
 
 		// Auth
 		JWTSecret: getEnv("JWT_SECRET", "dev-secret-change-in-production"),
+
+		// Cookie settings for refresh tokens
+		Cookie: CookieConfig{
+			Domain:   getEnv("COOKIE_DOMAIN", ""),                         // Empty = current domain
+			Secure:   getBoolEnv("COOKIE_SECURE", isProduction),           // Require HTTPS in production
+			SameSite: getEnv("COOKIE_SAME_SITE", "Strict"),                // Strict for CSRF protection
+			Path:     getEnv("COOKIE_PATH", "/"),                          // Available on all paths
+		},
 
 		// CORS
 		AllowedOrigins: strings.Split(getEnv("ALLOWED_ORIGINS", "http://localhost:3000"), ","),
