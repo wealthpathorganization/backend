@@ -81,6 +81,74 @@ func (m *MockUserService) LoginWithBackupCode(ctx context.Context, tempToken, ba
 	return args.Get(0).(*service.AuthResponse), args.Error(1)
 }
 
+func (m *MockUserService) RegisterWithDeviceInfo(ctx context.Context, input service.RegisterInput, deviceInfo *model.DeviceInfo) (*service.AuthResponse, error) {
+	args := m.Called(ctx, input, deviceInfo)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*service.AuthResponse), args.Error(1)
+}
+
+func (m *MockUserService) LoginWithDeviceInfo(ctx context.Context, input service.LoginInput, deviceInfo *model.DeviceInfo) (*service.AuthResponse, error) {
+	args := m.Called(ctx, input, deviceInfo)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*service.AuthResponse), args.Error(1)
+}
+
+func (m *MockUserService) LoginWithTOTPAndDeviceInfo(ctx context.Context, tempToken, code string, deviceInfo *model.DeviceInfo) (*service.AuthResponse, error) {
+	args := m.Called(ctx, tempToken, code, deviceInfo)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*service.AuthResponse), args.Error(1)
+}
+
+func (m *MockUserService) LoginWithBackupCodeAndDeviceInfo(ctx context.Context, tempToken, backupCode string, deviceInfo *model.DeviceInfo) (*service.AuthResponse, error) {
+	args := m.Called(ctx, tempToken, backupCode, deviceInfo)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*service.AuthResponse), args.Error(1)
+}
+
+func (m *MockUserService) RefreshAccessToken(ctx context.Context, refreshTokenString string, deviceInfo *model.DeviceInfo) (*service.AuthResponse, error) {
+	args := m.Called(ctx, refreshTokenString, deviceInfo)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*service.AuthResponse), args.Error(1)
+}
+
+func (m *MockUserService) RevokeRefreshTokenByString(ctx context.Context, refreshTokenString, reason string) error {
+	args := m.Called(ctx, refreshTokenString, reason)
+	return args.Error(0)
+}
+
+func (m *MockUserService) GetActiveSessions(ctx context.Context, userID uuid.UUID) ([]*model.Session, error) {
+	args := m.Called(ctx, userID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*model.Session), args.Error(1)
+}
+
+func (m *MockUserService) RevokeSession(ctx context.Context, userID uuid.UUID, sessionID uuid.UUID, reason string) error {
+	args := m.Called(ctx, userID, sessionID, reason)
+	return args.Error(0)
+}
+
+func (m *MockUserService) RevokeAllUserTokens(ctx context.Context, userID uuid.UUID, reason string) (int64, error) {
+	args := m.Called(ctx, userID, reason)
+	return args.Get(0).(int64), args.Error(1)
+}
+
+func (m *MockUserService) GetSessionIDFromRefreshToken(ctx context.Context, refreshTokenString string) (uuid.UUID, error) {
+	args := m.Called(ctx, refreshTokenString)
+	return args.Get(0).(uuid.UUID), args.Error(1)
+}
+
 type MockTransactionService struct {
 	mock.Mock
 }
@@ -250,7 +318,7 @@ func TestAPI_Auth_Register(t *testing.T) {
 	authHandler := handler.NewAuthHandler(mockUserService)
 
 	userID := uuid.New()
-	mockUserService.On("Register", mock.Anything, mock.AnythingOfType("service.RegisterInput")).Return(&service.AuthResponse{
+	mockUserService.On("RegisterWithDeviceInfo", mock.Anything, mock.AnythingOfType("service.RegisterInput"), mock.Anything).Return(&service.AuthResponse{
 		User: &model.User{
 			ID:    userID,
 			Email: "test@example.com",
@@ -312,7 +380,7 @@ func TestAPI_Auth_Login(t *testing.T) {
 	authHandler := handler.NewAuthHandler(mockUserService)
 
 	userID := uuid.New()
-	mockUserService.On("Login", mock.Anything, mock.AnythingOfType("service.LoginInput")).Return(&service.AuthResponse{
+	mockUserService.On("LoginWithDeviceInfo", mock.Anything, mock.AnythingOfType("service.LoginInput"), mock.Anything).Return(&service.AuthResponse{
 		User: &model.User{
 			ID:    userID,
 			Email: "test@example.com",
@@ -348,7 +416,7 @@ func TestAPI_Auth_Login_InvalidCredentials(t *testing.T) {
 	mockUserService := new(MockUserService)
 	authHandler := handler.NewAuthHandler(mockUserService)
 
-	mockUserService.On("Login", mock.Anything, mock.AnythingOfType("service.LoginInput")).Return(nil, service.ErrInvalidCredentials)
+	mockUserService.On("LoginWithDeviceInfo", mock.Anything, mock.AnythingOfType("service.LoginInput"), mock.Anything).Return(nil, service.ErrInvalidCredentials)
 
 	router := setupTestRouter(authHandler, nil, nil)
 	server := httptest.NewServer(router)
