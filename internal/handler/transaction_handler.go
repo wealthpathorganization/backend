@@ -125,7 +125,12 @@ func (h *TransactionHandler) Get(w http.ResponseWriter, r *http.Request) {
 // @Param page query int false "Page number" default(0)
 // @Param pageSize query int false "Items per page" default(20)
 // @Param type query string false "Filter by type (income or expense)"
-// @Param category query string false "Filter by category"
+// @Param category query string false "Filter by single category"
+// @Param categories query string false "Filter by multiple categories (comma-separated)"
+// @Param search query string false "Search in transaction descriptions"
+// @Param minAmount query number false "Minimum amount filter"
+// @Param maxAmount query number false "Maximum amount filter"
+// @Param datePreset query string false "Date preset (last7days, last30days, thisMonth, lastMonth)"
 // @Param startDate query string false "Filter by start date (YYYY-MM-DD)"
 // @Param endDate query string false "Filter by end date (YYYY-MM-DD)"
 // @Success 200 {array} model.Transaction
@@ -155,6 +160,29 @@ func (h *TransactionHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 	if category := r.URL.Query().Get("category"); category != "" {
 		input.Category = &category
+	}
+	// Parse multiple categories (comma-separated)
+	if categories := r.URL.Query().Get("categories"); categories != "" {
+		input.Categories = splitAndTrim(categories, ",")
+	}
+	// Parse search query
+	if search := r.URL.Query().Get("search"); search != "" {
+		input.Search = &search
+	}
+	// Parse amount range
+	if minAmount := r.URL.Query().Get("minAmount"); minAmount != "" {
+		if amount, err := parseDecimal(minAmount); err == nil {
+			input.MinAmount = &amount
+		}
+	}
+	if maxAmount := r.URL.Query().Get("maxAmount"); maxAmount != "" {
+		if amount, err := parseDecimal(maxAmount); err == nil {
+			input.MaxAmount = &amount
+		}
+	}
+	// Parse date preset
+	if datePreset := r.URL.Query().Get("datePreset"); datePreset != "" {
+		input.DatePreset = &datePreset
 	}
 	if startDate := r.URL.Query().Get("startDate"); startDate != "" {
 		if t, err := time.Parse("2006-01-02", startDate); err == nil {

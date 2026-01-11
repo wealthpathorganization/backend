@@ -16,6 +16,19 @@ func NewAIHandler(aiService *service.AIService) *AIHandler {
 	return &AIHandler{aiService: aiService}
 }
 
+// Chat godoc
+// @Summary AI financial assistant chat
+// @Description Send a message to the AI financial assistant and receive personalized advice
+// @Tags ai
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param input body service.ChatRequest true "Chat message"
+// @Success 200 {object} service.ChatResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 401 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /chat [post]
 func (h *AIHandler) Chat(w http.ResponseWriter, r *http.Request) {
 	userID := GetUserID(r.Context())
 	if userID == uuid.Nil {

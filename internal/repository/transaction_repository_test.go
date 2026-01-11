@@ -146,8 +146,9 @@ func TestTransactionRepository_List(t *testing.T) {
 		AddRow(uuid.New(), userID, "expense", decimal.NewFromFloat(50), "USD", "Food", "Lunch", time.Now(), time.Now(), time.Now()).
 		AddRow(uuid.New(), userID, "income", decimal.NewFromFloat(5000), "USD", "Salary", "Monthly", time.Now(), time.Now(), time.Now())
 
+	// Parameters: userID, type, category, categories[], search, minAmount, maxAmount, startDate, endDate, limit, offset
 	mock.ExpectQuery(`SELECT \* FROM transactions`).
-		WithArgs(userID, nil, nil, nil, nil, 20, 0).
+		WithArgs(userID, nil, nil, nil, nil, nil, nil, nil, nil, 20, 0).
 		WillReturnRows(rows)
 
 	txs, err := repo.List(ctx, userID, filters)

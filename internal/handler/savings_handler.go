@@ -79,18 +79,18 @@ func (h *SavingsGoalHandler) Get(w http.ResponseWriter, r *http.Request) {
 
 // List godoc
 // @Summary List savings goals
-// @Description Get all savings goals for the current user
+// @Description Get all savings goals for the current user with projection data
 // @Tags savings-goals
 // @Produce json
 // @Security BearerAuth
-// @Success 200 {array} model.SavingsGoal
+// @Success 200 {array} service.SavingsGoalWithProjection
 // @Failure 401 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
 // @Router /savings-goals [get]
 func (h *SavingsGoalHandler) List(w http.ResponseWriter, r *http.Request) {
 	userID := GetUserID(r.Context())
 
-	goals, err := h.service.List(r.Context(), userID)
+	goals, err := h.service.ListWithProjections(r.Context(), userID)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "failed to list savings goals")
 		return

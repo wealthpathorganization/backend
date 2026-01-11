@@ -3,7 +3,9 @@ package handler
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 
+	"github.com/shopspring/decimal"
 	"github.com/wealthpath/backend/internal/apperror"
 )
 
@@ -36,4 +38,32 @@ func respondAppError(w http.ResponseWriter, err *apperror.AppError) {
 		Field: err.Field,
 	}
 	respondJSON(w, err.StatusCode, resp)
+}
+
+// splitAndTrim splits a string by separator and trims whitespace from each part.
+func splitAndTrim(s, sep string) []string {
+	parts := strings.Split(s, sep)
+	result := make([]string, 0, len(parts))
+	for _, p := range parts {
+		trimmed := strings.TrimSpace(p)
+		if trimmed != "" {
+			result = append(result, trimmed)
+		}
+	}
+	return result
+}
+
+// parseDecimal parses a string into a decimal.Decimal.
+func parseDecimal(s string) (decimal.Decimal, error) {
+	return decimal.NewFromString(s)
+}
+
+// parseTransactionType parses a string into a TransactionType pointer.
+// Returns nil if the string is empty or invalid.
+func parseTransactionType(s string) *string {
+	s = strings.ToLower(strings.TrimSpace(s))
+	if s == "income" || s == "expense" {
+		return &s
+	}
+	return nil
 }

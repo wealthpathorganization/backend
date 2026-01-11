@@ -28,6 +28,7 @@ type DebtServiceInterface interface {
 	Delete(ctx context.Context, id, userID uuid.UUID) error
 	MakePayment(ctx context.Context, id, userID uuid.UUID, input service.MakePaymentInput) (*model.Debt, error)
 	GetPayoffPlan(ctx context.Context, id uuid.UUID, monthlyPayment decimal.Decimal) (*model.PayoffPlan, error)
+	GetDebtSummary(ctx context.Context, userID uuid.UUID) (*service.DebtSummary, error)
 	CalculateInterest(input service.InterestCalculatorInput) (*service.InterestCalculatorResult, error)
 }
 
@@ -36,6 +37,7 @@ type SavingsGoalServiceInterface interface {
 	Create(ctx context.Context, userID uuid.UUID, input service.CreateSavingsGoalInput) (*model.SavingsGoal, error)
 	Get(ctx context.Context, id uuid.UUID) (*model.SavingsGoal, error)
 	List(ctx context.Context, userID uuid.UUID) ([]model.SavingsGoal, error)
+	ListWithProjections(ctx context.Context, userID uuid.UUID) ([]service.SavingsGoalWithProjection, error)
 	Update(ctx context.Context, id, userID uuid.UUID, input service.UpdateSavingsGoalInput) (*model.SavingsGoal, error)
 	Delete(ctx context.Context, id, userID uuid.UUID) error
 	Contribute(ctx context.Context, id, userID uuid.UUID, amount decimal.Decimal) (*model.SavingsGoal, error)

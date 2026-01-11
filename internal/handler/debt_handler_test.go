@@ -84,6 +84,14 @@ func (m *MockDebtService) CalculateInterest(input service.InterestCalculatorInpu
 	return args.Get(0).(*service.InterestCalculatorResult), args.Error(1)
 }
 
+func (m *MockDebtService) GetDebtSummary(ctx context.Context, userID uuid.UUID) (*service.DebtSummary, error) {
+	args := m.Called(ctx, userID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*service.DebtSummary), args.Error(1)
+}
+
 func TestNewDebtHandler(t *testing.T) {
 	mockService := new(MockDebtService)
 	handler := NewDebtHandler(mockService)

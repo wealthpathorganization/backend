@@ -105,3 +105,37 @@ func (r *UserRepository) GetOrCreateByOAuth(ctx context.Context, user *model.Use
 	}
 	return user, nil
 }
+
+// UpdateTOTPSecret stores the TOTP secret for a user (during setup, before enabling).
+func (r *UserRepository) UpdateTOTPSecret(ctx context.Context, userID uuid.UUID, secret *string) error {
+	query := `UPDATE users SET totp_secret = $2, updated_at = NOW() WHERE id = $1`
+	_, err := r.db.ExecContext(ctx, query, userID, secret)
+	return err
+}
+
+// EnableTOTP enables 2FA for a user and stores backup codes.
+func (r *UserRepository) EnableTOTP(ctx context.Context, userID uuid.UUID, backupCodes []string) error {
+	query := `
+		UPDATE users
+		SET totp_enabled = TRUE, totp_backup_codes = $2, totp_verified_at = NOW(), updated_at = NOW()
+		WHERE id = $1`
+	_, err := r.db.ExecContext(ctx, query, userID, backupCodes)
+	return err
+}
+
+// DisableTOTP disables 2FA for a user and clears all TOTP data.
+func (r *UserRepository) DisableTOTP(ctx context.Context, userID uuid.UUID) error {
+	query := `
+		UPDATE users
+		SET totp_secret = NULL, totp_enabled = FALSE, totp_backup_codes = NULL, totp_verified_at = NULL, updated_at = NOW()
+		WHERE id = $1`
+	_, err := r.db.ExecContext(ctx, query, userID)
+	return err
+}
+
+// UpdateBackupCodes updates the backup codes for a user.
+func (r *UserRepository) UpdateBackupCodes(ctx context.Context, userID uuid.UUID, codes []string) error {
+	query := `UPDATE users SET totp_backup_codes = $2, updated_at = NOW() WHERE id = $1`
+	_, err := r.db.ExecContext(ctx, query, userID, codes)
+	return err
+}

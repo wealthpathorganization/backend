@@ -41,6 +41,11 @@ type Config struct {
 	ScraperEnabled  bool
 	ScraperSchedule string        // Cron expression (e.g., "0 * * * *" for hourly)
 	ScraperTimeout  time.Duration // Timeout for complete scrape cycle
+
+	// Web Push Notifications
+	VAPIDPublicKey  string
+	VAPIDPrivateKey string
+	VAPIDSubject    string // mailto:email or URL
 }
 
 func Load() *Config {
@@ -78,6 +83,11 @@ func Load() *Config {
 		ScraperEnabled:  getBoolEnv("SCRAPER_ENABLED", true),
 		ScraperSchedule: getEnv("SCRAPER_SCHEDULE", "0 * * * *"), // Default: hourly at minute 0
 		ScraperTimeout:  getDurationEnv("SCRAPER_TIMEOUT", 5*time.Minute),
+
+		// Web Push Notifications
+		VAPIDPublicKey:  os.Getenv("VAPID_PUBLIC_KEY"),
+		VAPIDPrivateKey: os.Getenv("VAPID_PRIVATE_KEY"),
+		VAPIDSubject:    getEnv("VAPID_SUBJECT", "mailto:notifications@wealthpath.app"),
 	}
 }
 

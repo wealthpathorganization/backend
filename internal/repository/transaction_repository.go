@@ -47,17 +47,37 @@ func (r *TransactionRepository) GetByID(ctx context.Context, id uuid.UUID) (*mod
 func (r *TransactionRepository) List(ctx context.Context, userID uuid.UUID, filters TransactionFilters) ([]model.Transaction, error) {
 	var transactions []model.Transaction
 	query := `
-		SELECT * FROM transactions 
+		SELECT * FROM transactions
 		WHERE user_id = $1
 		AND ($2::text IS NULL OR type = $2)
 		AND ($3::text IS NULL OR category = $3)
-		AND ($4::timestamp IS NULL OR date >= $4)
-		AND ($5::timestamp IS NULL OR date <= $5)
+		AND ($4::text[] IS NULL OR category = ANY($4))
+		AND ($5::text IS NULL OR description ILIKE '%' || $5 || '%')
+		AND ($6::numeric IS NULL OR amount >= $6)
+		AND ($7::numeric IS NULL OR amount <= $7)
+		AND ($8::timestamp IS NULL OR date >= $8)
+		AND ($9::timestamp IS NULL OR date <= $9)
 		ORDER BY date DESC, created_at DESC
-		LIMIT $6 OFFSET $7`
+		LIMIT $10 OFFSET $11`
+
+	// Convert categories slice to pq.StringArray for PostgreSQL
+	var categories interface{}
+	if len(filters.Categories) > 0 {
+		categories = filters.Categories
+	}
 
 	err := r.db.SelectContext(ctx, &transactions, query,
-		userID, filters.Type, filters.Category, filters.StartDate, filters.EndDate, filters.Limit, filters.Offset,
+		userID,
+		filters.Type,
+		filters.Category,
+		categories,
+		filters.Search,
+		filters.MinAmount,
+		filters.MaxAmount,
+		filters.StartDate,
+		filters.EndDate,
+		filters.Limit,
+		filters.Offset,
 	)
 	return transactions, err
 }
@@ -166,10 +186,14 @@ func (r *TransactionRepository) GetMonthlyComparison(ctx context.Context, userID
 }
 
 type TransactionFilters struct {
-	Type      *string
-	Category  *string
-	StartDate *time.Time
-	EndDate   *time.Time
-	Limit     int
-	Offset    int
+	Type       *string
+	Category   *string
+	Categories []string // Multiple categories filter
+	Search     *string  // Text search in description
+	MinAmount  *decimal.Decimal
+	MaxAmount  *decimal.Decimal
+	StartDate  *time.Time
+	EndDate    *time.Time
+	Limit      int
+	Offset     int
 }

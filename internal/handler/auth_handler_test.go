@@ -53,6 +53,30 @@ func (m *MockUserService) UpdateSettings(ctx context.Context, id uuid.UUID, inpu
 	return args.Get(0).(*model.User), args.Error(1)
 }
 
+func (m *MockUserService) RefreshToken(ctx context.Context, userID uuid.UUID) (*service.AuthResponse, error) {
+	args := m.Called(ctx, userID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*service.AuthResponse), args.Error(1)
+}
+
+func (m *MockUserService) LoginWithTOTP(ctx context.Context, tempToken, code string) (*service.AuthResponse, error) {
+	args := m.Called(ctx, tempToken, code)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*service.AuthResponse), args.Error(1)
+}
+
+func (m *MockUserService) LoginWithBackupCode(ctx context.Context, tempToken, backupCode string) (*service.AuthResponse, error) {
+	args := m.Called(ctx, tempToken, backupCode)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*service.AuthResponse), args.Error(1)
+}
+
 // Note: AuthServiceInterface is defined in auth_handler.go
 
 func TestAuthHandler_Register_Success(t *testing.T) {
@@ -402,6 +426,62 @@ func TestAuthHandler_UpdateSettings_ServiceError(t *testing.T) {
 
 	rr := httptest.NewRecorder()
 	handler.UpdateSettings(rr, req)
+
+	assert.Equal(t, http.StatusInternalServerError, rr.Code)
+	mockService.AssertExpectations(t)
+}
+
+func TestAuthHandler_RefreshToken_Success(t *testing.T) {
+	mockService := new(MockUserService)
+	handler := NewAuthHandler(mockService)
+
+	userID := uuid.New()
+	expectedResp := &service.AuthResponse{
+		User: &model.User{
+			ID:    userID,
+			Email: "test@example.com",
+			Name:  "Test User",
+		},
+		Token: "new_jwt_token",
+	}
+
+	mockService.On("RefreshToken", mock.Anything, userID).Return(expectedResp, nil)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/refresh", nil)
+	req = req.WithContext(context.WithValue(req.Context(), UserIDKey, userID))
+
+	rr := httptest.NewRecorder()
+	handler.RefreshToken(rr, req)
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+	mockService.AssertExpectations(t)
+}
+
+func TestAuthHandler_RefreshToken_Unauthorized(t *testing.T) {
+	mockService := new(MockUserService)
+	handler := NewAuthHandler(mockService)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/refresh", nil)
+	// No userID in context
+
+	rr := httptest.NewRecorder()
+	handler.RefreshToken(rr, req)
+
+	assert.Equal(t, http.StatusUnauthorized, rr.Code)
+}
+
+func TestAuthHandler_RefreshToken_ServiceError(t *testing.T) {
+	mockService := new(MockUserService)
+	handler := NewAuthHandler(mockService)
+
+	userID := uuid.New()
+	mockService.On("RefreshToken", mock.Anything, userID).Return(nil, errors.New("db error"))
+
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/refresh", nil)
+	req = req.WithContext(context.WithValue(req.Context(), UserIDKey, userID))
+
+	rr := httptest.NewRecorder()
+	handler.RefreshToken(rr, req)
 
 	assert.Equal(t, http.StatusInternalServerError, rr.Code)
 	mockService.AssertExpectations(t)

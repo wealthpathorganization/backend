@@ -28,7 +28,7 @@ func NewInterestRateHandler(svc *service.InterestRateService) *InterestRateHandl
 // @Param term query int false "Term in months"
 // @Param bank query string false "Bank code (vcb, tcb, mb, etc.)"
 // @Success 200 {array} model.InterestRate
-// @Router /api/interest-rates [get]
+// @Router /interest-rates [get]
 func (h *InterestRateHandler) ListRates(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -66,7 +66,7 @@ func (h *InterestRateHandler) ListRates(w http.ResponseWriter, r *http.Request) 
 // @Param term query int true "Term in months"
 // @Param limit query int false "Number of results" default(5)
 // @Success 200 {array} model.InterestRate
-// @Router /api/interest-rates/best [get]
+// @Router /interest-rates/best [get]
 func (h *InterestRateHandler) GetBestRates(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -112,7 +112,7 @@ func (h *InterestRateHandler) GetBestRates(w http.ResponseWriter, r *http.Reques
 // @Param type query string false "Product type (deposit, loan, mortgage)" default(deposit)
 // @Param term query int true "Term in months"
 // @Success 200 {array} model.InterestRate
-// @Router /api/interest-rates/compare [get]
+// @Router /interest-rates/compare [get]
 func (h *InterestRateHandler) CompareRates(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -149,7 +149,7 @@ func (h *InterestRateHandler) CompareRates(w http.ResponseWriter, r *http.Reques
 // @Accept json
 // @Produce json
 // @Success 200 {array} model.Bank
-// @Router /api/interest-rates/banks [get]
+// @Router /interest-rates/banks [get]
 func (h *InterestRateHandler) GetBanks(w http.ResponseWriter, r *http.Request) {
 	banks := h.service.GetBanks()
 	respondJSON(w, http.StatusOK, banks)
@@ -166,7 +166,7 @@ func (h *InterestRateHandler) GetBanks(w http.ResponseWriter, r *http.Request) {
 // @Param term query int true "Term in months"
 // @Param days query int false "Number of days of history" default(90)
 // @Success 200 {array} repository.RateHistoryEntry
-// @Router /api/interest-rates/history [get]
+// @Router /interest-rates/history [get]
 func (h *InterestRateHandler) GetHistory(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -216,7 +216,7 @@ func (h *InterestRateHandler) GetHistory(w http.ResponseWriter, r *http.Request)
 // @Accept json
 // @Produce json
 // @Success 200 {object} map[string]string
-// @Router /api/interest-rates/seed [post]
+// @Router /interest-rates/seed [post]
 func (h *InterestRateHandler) SeedRates(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -235,7 +235,7 @@ func (h *InterestRateHandler) SeedRates(w http.ResponseWriter, r *http.Request) 
 // @Accept json
 // @Produce json
 // @Success 200 {object} map[string]interface{}
-// @Router /api/interest-rates/scrape [post]
+// @Router /interest-rates/scrape [post]
 func (h *InterestRateHandler) ScrapeRates(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -258,7 +258,7 @@ func (h *InterestRateHandler) ScrapeRates(w http.ResponseWriter, r *http.Request
 // @Accept json
 // @Produce json
 // @Success 200 {object} scraper.HealthStatus
-// @Router /api/interest-rates/scraper-health [get]
+// @Router /interest-rates/scraper-health [get]
 func (h *InterestRateHandler) GetScraperHealth(w http.ResponseWriter, r *http.Request) {
 	// For now, use zero time for next run - can be enhanced to pass scheduler info
 	health := h.service.GetScraperHealth(time.Time{})

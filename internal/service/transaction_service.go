@@ -57,12 +57,17 @@ type UpdateTransactionInput struct {
 }
 
 type ListTransactionsInput struct {
-	Type      *string    `json:"type"`
-	Category  *string    `json:"category"`
-	StartDate *time.Time `json:"startDate"`
-	EndDate   *time.Time `json:"endDate"`
-	Page      int        `json:"page"`
-	PageSize  int        `json:"pageSize"`
+	Type       *string          `json:"type"`
+	Category   *string          `json:"category"`
+	Categories []string         `json:"categories"`  // Multiple categories
+	Search     *string          `json:"search"`      // Text search in description
+	MinAmount  *decimal.Decimal `json:"minAmount"`   // Minimum amount filter
+	MaxAmount  *decimal.Decimal `json:"maxAmount"`   // Maximum amount filter
+	DatePreset *string          `json:"datePreset"`  // Preset: last7days, last30days, thisMonth, lastMonth
+	StartDate  *time.Time       `json:"startDate"`
+	EndDate    *time.Time       `json:"endDate"`
+	Page       int              `json:"page"`
+	PageSize   int              `json:"pageSize"`
 }
 
 // Create validates and persists a new transaction for the given user.
@@ -113,13 +118,29 @@ func (s *TransactionService) List(ctx context.Context, userID uuid.UUID, input L
 		input.PageSize = 100
 	}
 
+	// Resolve date preset if provided
+	startDate, endDate := input.StartDate, input.EndDate
+	if input.DatePreset != nil {
+		presetStart, presetEnd := resolveDatePreset(*input.DatePreset)
+		if !presetStart.IsZero() {
+			startDate = &presetStart
+		}
+		if !presetEnd.IsZero() {
+			endDate = &presetEnd
+		}
+	}
+
 	filters := repository.TransactionFilters{
-		Type:      input.Type,
-		Category:  input.Category,
-		StartDate: input.StartDate,
-		EndDate:   input.EndDate,
-		Limit:     input.PageSize,
-		Offset:    input.Page * input.PageSize,
+		Type:       input.Type,
+		Category:   input.Category,
+		Categories: input.Categories,
+		Search:     input.Search,
+		MinAmount:  input.MinAmount,
+		MaxAmount:  input.MaxAmount,
+		StartDate:  startDate,
+		EndDate:    endDate,
+		Limit:      input.PageSize,
+		Offset:     input.Page * input.PageSize,
 	}
 
 	txs, err := s.repo.List(ctx, userID, filters)
@@ -127,6 +148,29 @@ func (s *TransactionService) List(ctx context.Context, userID uuid.UUID, input L
 		return nil, fmt.Errorf("listing transactions for user %s: %w", userID, err)
 	}
 	return txs, nil
+}
+
+// resolveDatePreset converts a date preset string to start and end times.
+func resolveDatePreset(preset string) (start, end time.Time) {
+	now := time.Now()
+	loc := now.Location()
+
+	switch preset {
+	case "last7days":
+		start = time.Date(now.Year(), now.Month(), now.Day()-6, 0, 0, 0, 0, loc)
+		end = time.Date(now.Year(), now.Month(), now.Day(), 23, 59, 59, 999999999, loc)
+	case "last30days":
+		start = time.Date(now.Year(), now.Month(), now.Day()-29, 0, 0, 0, 0, loc)
+		end = time.Date(now.Year(), now.Month(), now.Day(), 23, 59, 59, 999999999, loc)
+	case "thisMonth":
+		start = time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, loc)
+		end = time.Date(now.Year(), now.Month(), now.Day(), 23, 59, 59, 999999999, loc)
+	case "lastMonth":
+		lastMonth := now.AddDate(0, -1, 0)
+		start = time.Date(lastMonth.Year(), lastMonth.Month(), 1, 0, 0, 0, 0, loc)
+		end = time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, loc).Add(-time.Nanosecond)
+	}
+	return start, end
 }
 
 // Update modifies an existing transaction.
