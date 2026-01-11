@@ -15,8 +15,11 @@ import (
 type AuthServiceInterface interface {
 	Register(ctx context.Context, input service.RegisterInput) (*service.AuthResponse, error)
 	Login(ctx context.Context, input service.LoginInput) (*service.AuthResponse, error)
+	LoginWithTOTP(ctx context.Context, tempToken, code string) (*service.AuthResponse, error)
+	LoginWithBackupCode(ctx context.Context, tempToken, backupCode string) (*service.AuthResponse, error)
 	GetByID(ctx context.Context, id uuid.UUID) (*model.User, error)
 	UpdateSettings(ctx context.Context, userID uuid.UUID, input service.UpdateSettingsInput) (*model.User, error)
+	RefreshToken(ctx context.Context, userID uuid.UUID) (*service.AuthResponse, error)
 }
 
 type AuthHandler struct {
@@ -155,4 +158,114 @@ func (h *AuthHandler) UpdateSettings(w http.ResponseWriter, r *http.Request) {
 	}
 
 	respondJSON(w, http.StatusOK, user)
+}
+
+// RefreshToken godoc
+// @Summary Refresh authentication token
+// @Description Get a new JWT token using an existing valid token. Useful for mobile apps to maintain sessions.
+// @Tags auth
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} service.AuthResponse
+// @Failure 401 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /auth/refresh [post]
+func (h *AuthHandler) RefreshToken(w http.ResponseWriter, r *http.Request) {
+	userID := GetUserID(r.Context())
+	if userID == uuid.Nil {
+		respondError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	resp, err := h.userService.RefreshToken(r.Context(), userID)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "failed to refresh token")
+		return
+	}
+
+	respondJSON(w, http.StatusOK, resp)
+}
+
+type loginTOTPRequest struct {
+	TempToken string `json:"tempToken"`
+	Code      string `json:"code"`
+}
+
+// LoginWithTOTP godoc
+// @Summary Complete login with 2FA
+// @Description Complete authentication using a TOTP code after initial login
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param input body loginTOTPRequest true "Temp token and TOTP code"
+// @Success 200 {object} service.AuthResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 401 {object} ErrorResponse "Invalid credentials or code"
+// @Failure 500 {object} ErrorResponse
+// @Router /auth/login/2fa [post]
+func (h *AuthHandler) LoginWithTOTP(w http.ResponseWriter, r *http.Request) {
+	var input loginTOTPRequest
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	if input.TempToken == "" || input.Code == "" {
+		respondError(w, http.StatusBadRequest, "tempToken and code are required")
+		return
+	}
+
+	resp, err := h.userService.LoginWithTOTP(r.Context(), input.TempToken, input.Code)
+	if err != nil {
+		if errors.Is(err, service.ErrInvalidCredentials) {
+			respondError(w, http.StatusUnauthorized, "invalid credentials or code")
+			return
+		}
+		respondError(w, http.StatusInternalServerError, "failed to complete login")
+		return
+	}
+
+	respondJSON(w, http.StatusOK, resp)
+}
+
+type loginBackupCodeRequest struct {
+	TempToken  string `json:"tempToken"`
+	BackupCode string `json:"backupCode"`
+}
+
+// LoginWithBackupCode godoc
+// @Summary Complete login with backup code
+// @Description Complete authentication using a backup code after initial login
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param input body loginBackupCodeRequest true "Temp token and backup code"
+// @Success 200 {object} service.AuthResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 401 {object} ErrorResponse "Invalid credentials or code"
+// @Failure 500 {object} ErrorResponse
+// @Router /auth/login/2fa/backup [post]
+func (h *AuthHandler) LoginWithBackupCode(w http.ResponseWriter, r *http.Request) {
+	var input loginBackupCodeRequest
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	if input.TempToken == "" || input.BackupCode == "" {
+		respondError(w, http.StatusBadRequest, "tempToken and backupCode are required")
+		return
+	}
+
+	resp, err := h.userService.LoginWithBackupCode(r.Context(), input.TempToken, input.BackupCode)
+	if err != nil {
+		if errors.Is(err, service.ErrInvalidCredentials) {
+			respondError(w, http.StatusUnauthorized, "invalid credentials or backup code")
+			return
+		}
+		respondError(w, http.StatusInternalServerError, "failed to complete login")
+		return
+	}
+
+	respondJSON(w, http.StatusOK, resp)
 }

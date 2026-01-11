@@ -4,20 +4,25 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 	"github.com/shopspring/decimal"
 )
 
 type User struct {
-	ID            uuid.UUID `db:"id" json:"id"`
-	Email         string    `db:"email" json:"email"`
-	PasswordHash  *string   `db:"password_hash" json:"-"`
-	Name          string    `db:"name" json:"name"`
-	Currency      string    `db:"currency" json:"currency"`
-	OAuthProvider *string   `db:"oauth_provider" json:"oauthProvider,omitempty"`
-	OAuthID       *string   `db:"oauth_id" json:"-"`
-	AvatarURL     *string   `db:"avatar_url" json:"avatarUrl,omitempty"`
-	CreatedAt     time.Time `db:"created_at" json:"createdAt"`
-	UpdatedAt     time.Time `db:"updated_at" json:"updatedAt"`
+	ID              uuid.UUID  `db:"id" json:"id"`
+	Email           string     `db:"email" json:"email"`
+	PasswordHash    *string    `db:"password_hash" json:"-"`
+	Name            string     `db:"name" json:"name"`
+	Currency        string     `db:"currency" json:"currency"`
+	OAuthProvider   *string    `db:"oauth_provider" json:"oauthProvider,omitempty"`
+	OAuthID         *string    `db:"oauth_id" json:"-"`
+	AvatarURL       *string    `db:"avatar_url" json:"avatarUrl,omitempty"`
+	TOTPSecret      *string    `db:"totp_secret" json:"-"`
+	TOTPEnabled     bool       `db:"totp_enabled" json:"totpEnabled"`
+	TOTPBackupCodes pq.StringArray `db:"totp_backup_codes" json:"-"`
+	TOTPVerifiedAt  *time.Time `db:"totp_verified_at" json:"-"`
+	CreatedAt       time.Time  `db:"created_at" json:"createdAt"`
+	UpdatedAt       time.Time  `db:"updated_at" json:"updatedAt"`
 }
 
 type TransactionType string
@@ -41,16 +46,30 @@ type Transaction struct {
 }
 
 type Budget struct {
-	ID        uuid.UUID       `db:"id" json:"id"`
-	UserID    uuid.UUID       `db:"user_id" json:"userId"`
-	Category  string          `db:"category" json:"category"`
-	Amount    decimal.Decimal `db:"amount" json:"amount"`
-	Currency  string          `db:"currency" json:"currency"`
-	Period    string          `db:"period" json:"period"` // monthly, weekly, yearly
-	StartDate time.Time       `db:"start_date" json:"startDate"`
-	EndDate   *time.Time      `db:"end_date" json:"endDate,omitempty"`
-	CreatedAt time.Time       `db:"created_at" json:"createdAt"`
-	UpdatedAt time.Time       `db:"updated_at" json:"updatedAt"`
+	ID                uuid.UUID        `db:"id" json:"id"`
+	UserID            uuid.UUID        `db:"user_id" json:"userId"`
+	Category          string           `db:"category" json:"category"`
+	Amount            decimal.Decimal  `db:"amount" json:"amount"`
+	Currency          string           `db:"currency" json:"currency"`
+	Period            string           `db:"period" json:"period"` // monthly, weekly, yearly
+	StartDate         time.Time        `db:"start_date" json:"startDate"`
+	EndDate           *time.Time       `db:"end_date" json:"endDate,omitempty"`
+	EnableRollover    bool             `db:"enable_rollover" json:"enableRollover"`
+	MaxRolloverAmount *decimal.Decimal `db:"max_rollover_amount" json:"maxRolloverAmount,omitempty"`
+	RolloverAmount    decimal.Decimal  `db:"rollover_amount" json:"rolloverAmount"`
+	CreatedAt         time.Time        `db:"created_at" json:"createdAt"`
+	UpdatedAt         time.Time        `db:"updated_at" json:"updatedAt"`
+}
+
+// BudgetRollover represents a rollover transaction from one period to another.
+type BudgetRollover struct {
+	ID              uuid.UUID       `db:"id" json:"id"`
+	BudgetID        uuid.UUID       `db:"budget_id" json:"budgetId"`
+	FromPeriodStart time.Time       `db:"from_period_start" json:"fromPeriodStart"`
+	FromPeriodEnd   time.Time       `db:"from_period_end" json:"fromPeriodEnd"`
+	ToPeriodStart   time.Time       `db:"to_period_start" json:"toPeriodStart"`
+	Amount          decimal.Decimal `db:"amount" json:"amount"`
+	CreatedAt       time.Time       `db:"created_at" json:"createdAt"`
 }
 
 type BudgetWithSpent struct {
@@ -219,4 +238,99 @@ var IncomeCategories = []string{
 	"Gifts",
 	"Refunds",
 	"Other",
+}
+
+// Push Notifications
+
+type PushSubscription struct {
+	ID        uuid.UUID `db:"id" json:"id"`
+	UserID    uuid.UUID `db:"user_id" json:"userId"`
+	Endpoint  string    `db:"endpoint" json:"endpoint"`
+	P256dh    string    `db:"p256dh" json:"p256dh"`
+	Auth      string    `db:"auth" json:"auth"`
+	UserAgent *string   `db:"user_agent" json:"userAgent,omitempty"`
+	CreatedAt time.Time `db:"created_at" json:"createdAt"`
+	UpdatedAt time.Time `db:"updated_at" json:"updatedAt"`
+}
+
+type NotificationPreferences struct {
+	ID                    uuid.UUID `db:"id" json:"id"`
+	UserID                uuid.UUID `db:"user_id" json:"userId"`
+	BillRemindersEnabled  bool      `db:"bill_reminders_enabled" json:"billRemindersEnabled"`
+	BillReminderDaysBefore int      `db:"bill_reminder_days_before" json:"billReminderDaysBefore"`
+	BudgetAlertsEnabled   bool      `db:"budget_alerts_enabled" json:"budgetAlertsEnabled"`
+	BudgetAlertThreshold  int       `db:"budget_alert_threshold" json:"budgetAlertThreshold"` // Percentage
+	GoalMilestonesEnabled bool      `db:"goal_milestones_enabled" json:"goalMilestonesEnabled"`
+	WeeklySummaryEnabled  bool      `db:"weekly_summary_enabled" json:"weeklySummaryEnabled"`
+	CreatedAt             time.Time `db:"created_at" json:"createdAt"`
+	UpdatedAt             time.Time `db:"updated_at" json:"updatedAt"`
+}
+
+type NotificationType string
+
+const (
+	NotificationTypeBillReminder  NotificationType = "bill_reminder"
+	NotificationTypeBudgetAlert   NotificationType = "budget_alert"
+	NotificationTypeGoalMilestone NotificationType = "goal_milestone"
+	NotificationTypeWeeklySummary NotificationType = "weekly_summary"
+)
+
+type NotificationLog struct {
+	ID               uuid.UUID        `db:"id" json:"id"`
+	UserID           uuid.UUID        `db:"user_id" json:"userId"`
+	NotificationType NotificationType `db:"notification_type" json:"notificationType"`
+	ReferenceID      *uuid.UUID       `db:"reference_id" json:"referenceId,omitempty"`
+	ReferenceDate    *time.Time       `db:"reference_date" json:"referenceDate,omitempty"`
+	Title            string           `db:"title" json:"title"`
+	Body             string           `db:"body" json:"body"`
+	SentAt           time.Time        `db:"sent_at" json:"sentAt"`
+	Success          bool             `db:"success" json:"success"`
+	ErrorMessage     *string          `db:"error_message" json:"errorMessage,omitempty"`
+}
+
+// Refresh Tokens for Remember Me feature
+
+// DeviceInfo stores information about the device/browser used for a session
+type DeviceInfo struct {
+	Browser    string `json:"browser,omitempty"`
+	OS         string `json:"os,omitempty"`
+	DeviceType string `json:"deviceType,omitempty"` // desktop, mobile, tablet
+	IP         string `json:"ip,omitempty"`
+}
+
+// RefreshToken represents a refresh token for persistent sessions
+type RefreshToken struct {
+	ID            uuid.UUID   `db:"id" json:"id"`
+	UserID        uuid.UUID   `db:"user_id" json:"userId"`
+	TokenHash     string      `db:"token_hash" json:"-"` // Never expose in JSON
+	DeviceInfo    *DeviceInfo `db:"device_info" json:"deviceInfo,omitempty"`
+	CreatedAt     time.Time   `db:"created_at" json:"createdAt"`
+	ExpiresAt     time.Time   `db:"expires_at" json:"expiresAt"`
+	LastUsedAt    time.Time   `db:"last_used_at" json:"lastUsedAt"`
+	RevokedAt     *time.Time  `db:"revoked_at" json:"revokedAt,omitempty"`
+	RevokedReason *string     `db:"revoked_reason" json:"revokedReason,omitempty"`
+}
+
+// IsExpired returns true if the token has expired
+func (rt *RefreshToken) IsExpired() bool {
+	return time.Now().After(rt.ExpiresAt)
+}
+
+// IsRevoked returns true if the token has been revoked
+func (rt *RefreshToken) IsRevoked() bool {
+	return rt.RevokedAt != nil
+}
+
+// IsValid returns true if the token is valid (not expired and not revoked)
+func (rt *RefreshToken) IsValid() bool {
+	return !rt.IsExpired() && !rt.IsRevoked()
+}
+
+// Session represents an active user session for display purposes
+type Session struct {
+	ID         uuid.UUID   `json:"id"`
+	DeviceInfo *DeviceInfo `json:"deviceInfo,omitempty"`
+	CreatedAt  time.Time   `json:"createdAt"`
+	LastUsedAt time.Time   `json:"lastUsedAt"`
+	IsCurrent  bool        `json:"isCurrent"`
 }

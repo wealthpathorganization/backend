@@ -77,6 +77,29 @@ type InterestCalculatorResult struct {
 	PayoffDate     time.Time       `json:"payoffDate"`
 }
 
+// DebtSummary provides an aggregate view of all user debts with payoff projections.
+type DebtSummary struct {
+	TotalDebt         decimal.Decimal     `json:"totalDebt"`
+	DebtCount         int                 `json:"debtCount"`
+	DebtFreeDate      *time.Time          `json:"debtFreeDate,omitempty"`
+	MonthsToDebtFree  *int                `json:"monthsToDebtFree,omitempty"`
+	TotalInterestCost decimal.Decimal     `json:"totalInterestCost"`
+	DebtsByPayoff     []DebtPayoffSummary `json:"debtsByPayoff"`
+}
+
+// DebtPayoffSummary provides payoff details for a single debt.
+type DebtPayoffSummary struct {
+	ID             uuid.UUID       `json:"id"`
+	Name           string          `json:"name"`
+	Type           model.DebtType  `json:"type"`
+	CurrentBalance decimal.Decimal `json:"currentBalance"`
+	InterestRate   decimal.Decimal `json:"interestRate"`
+	MinimumPayment decimal.Decimal `json:"minimumPayment"`
+	PayoffDate     time.Time       `json:"payoffDate"`
+	MonthsToPayoff int             `json:"monthsToPayoff"`
+	TotalInterest  decimal.Decimal `json:"totalInterest"`
+}
+
 // Create creates a new debt record for the given user.
 // Defaults currency to USD and sets current balance to original amount if not specified.
 func (s *DebtService) Create(ctx context.Context, userID uuid.UUID, input CreateDebtInput) (*model.Debt, error) {
@@ -242,6 +265,87 @@ func (s *DebtService) CalculateInterest(input InterestCalculatorInput) (*Interes
 		TotalInterest:  decimal.NewFromFloat(totalInterest).Round(2),
 		PayoffDate:     time.Now().AddDate(0, input.TermMonths, 0),
 	}, nil
+}
+
+// GetDebtSummary calculates aggregate debt projections for all user debts.
+// Returns total debt, debt-free date, total interest cost, and debts sorted by payoff date.
+func (s *DebtService) GetDebtSummary(ctx context.Context, userID uuid.UUID) (*DebtSummary, error) {
+	debts, err := s.repo.List(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("listing debts for summary: %w", err)
+	}
+
+	summary := &DebtSummary{
+		TotalDebt:         decimal.Zero,
+		DebtCount:         len(debts),
+		TotalInterestCost: decimal.Zero,
+		DebtsByPayoff:     make([]DebtPayoffSummary, 0, len(debts)),
+	}
+
+	if len(debts) == 0 {
+		return summary, nil
+	}
+
+	var latestPayoffDate time.Time
+	maxMonths := 0
+
+	for _, debt := range debts {
+		// Skip debts that are already paid off
+		if debt.CurrentBalance.LessThanOrEqual(decimal.Zero) {
+			continue
+		}
+
+		summary.TotalDebt = summary.TotalDebt.Add(debt.CurrentBalance)
+
+		// Calculate payoff using minimum payment
+		plan := calculatePayoffPlan(&debt, debt.MinimumPayment)
+
+		summary.TotalInterestCost = summary.TotalInterestCost.Add(plan.TotalInterest)
+
+		debtSummary := DebtPayoffSummary{
+			ID:             debt.ID,
+			Name:           debt.Name,
+			Type:           debt.Type,
+			CurrentBalance: debt.CurrentBalance,
+			InterestRate:   debt.InterestRate,
+			MinimumPayment: debt.MinimumPayment,
+			PayoffDate:     plan.PayoffDate,
+			MonthsToPayoff: plan.MonthsToPayoff,
+			TotalInterest:  plan.TotalInterest,
+		}
+
+		summary.DebtsByPayoff = append(summary.DebtsByPayoff, debtSummary)
+
+		// Track the latest payoff date
+		if plan.PayoffDate.After(latestPayoffDate) {
+			latestPayoffDate = plan.PayoffDate
+		}
+		if plan.MonthsToPayoff > maxMonths {
+			maxMonths = plan.MonthsToPayoff
+		}
+	}
+
+	// Set debt-free date if there are active debts
+	if summary.TotalDebt.GreaterThan(decimal.Zero) {
+		summary.DebtFreeDate = &latestPayoffDate
+		summary.MonthsToDebtFree = &maxMonths
+	}
+
+	// Sort by payoff date (ascending)
+	sortDebtsByPayoff(summary.DebtsByPayoff)
+
+	return summary, nil
+}
+
+// sortDebtsByPayoff sorts debts by payoff date in ascending order.
+func sortDebtsByPayoff(debts []DebtPayoffSummary) {
+	for i := 0; i < len(debts)-1; i++ {
+		for j := i + 1; j < len(debts); j++ {
+			if debts[j].PayoffDate.Before(debts[i].PayoffDate) {
+				debts[i], debts[j] = debts[j], debts[i]
+			}
+		}
+	}
 }
 
 func calculatePayoffPlan(debt *model.Debt, monthlyPayment decimal.Decimal) *model.PayoffPlan {

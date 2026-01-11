@@ -57,6 +57,30 @@ func (m *MockUserService) UpdateSettings(ctx context.Context, userID uuid.UUID, 
 	return args.Get(0).(*model.User), args.Error(1)
 }
 
+func (m *MockUserService) RefreshToken(ctx context.Context, userID uuid.UUID) (*service.AuthResponse, error) {
+	args := m.Called(ctx, userID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*service.AuthResponse), args.Error(1)
+}
+
+func (m *MockUserService) LoginWithTOTP(ctx context.Context, tempToken, code string) (*service.AuthResponse, error) {
+	args := m.Called(ctx, tempToken, code)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*service.AuthResponse), args.Error(1)
+}
+
+func (m *MockUserService) LoginWithBackupCode(ctx context.Context, tempToken, backupCode string) (*service.AuthResponse, error) {
+	args := m.Called(ctx, tempToken, backupCode)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*service.AuthResponse), args.Error(1)
+}
+
 type MockTransactionService struct {
 	mock.Mock
 }

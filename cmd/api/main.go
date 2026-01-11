@@ -86,10 +86,20 @@ func main() {
 	interestRateService := service.NewInterestRateService(interestRateRepo)
 	reportRepo := repository.NewReportRepository(db)
 	reportService := service.NewReportService(reportRepo)
+	exportService := service.NewExportService(transactionRepo)
+
+	// Initialize TOTP service with repository adapter
+	totpRepoAdapter := &TOTPUserRepoAdapter{userRepo: userRepo}
+	totpService := service.NewTOTPService(totpRepoAdapter, "WealthPath")
+
+	// Initialize push notification service
+	pushRepo := repository.NewPushRepository(db)
+	pushService := service.NewPushNotificationService(pushRepo, cfg)
 
 	// Initialize handlers
 	authHandler := handler.NewAuthHandler(userService)
 	oauthHandler := handler.NewOAuthHandler(userService)
+	totpHandler := handler.NewTOTPHandler(totpService)
 	transactionHandler := handler.NewTransactionHandler(transactionService)
 	budgetHandler := handler.NewBudgetHandler(budgetService)
 	savingsHandler := handler.NewSavingsGoalHandler(savingsService)
@@ -99,10 +109,12 @@ func main() {
 	aiHandler := handler.NewAIHandler(aiService)
 	interestRateHandler := handler.NewInterestRateHandler(interestRateService)
 	reportHandler := handler.NewReportHandler(reportService)
+	exportHandler := handler.NewExportHandler(exportService, reportService)
 	calendarHandler := handler.NewCalendarHandler(recurringService, func(ctx context.Context, userID uuid.UUID) string {
 		currency, _ := reportRepo.GetUserCurrency(ctx, userID)
 		return currency
 	})
+	pushHandler := handler.NewPushHandler(pushService)
 
 	r := chi.NewRouter()
 
@@ -111,12 +123,8 @@ func main() {
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.RequestID)
 	// CORS - allow frontend origin from env or default
-	allowedOrigins := os.Getenv("ALLOWED_ORIGINS")
-	if allowedOrigins == "" {
-		allowedOrigins = "http://localhost:3000"
-	}
 	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   []string{allowedOrigins},
+		AllowedOrigins:   cfg.AllowedOrigins,
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type"},
 		ExposedHeaders:   []string{"Link"},
@@ -145,11 +153,16 @@ func main() {
 	// Public routes
 	r.Post("/api/auth/register", authHandler.Register)
 	r.Post("/api/auth/login", authHandler.Login)
+	r.Post("/api/auth/login/2fa", authHandler.LoginWithTOTP)
+	r.Post("/api/auth/login/2fa/backup", authHandler.LoginWithBackupCode)
 
 	// OAuth routes - supports facebook, google, etc.
 	r.Get("/api/auth/{provider}", oauthHandler.OAuthLogin)
 	r.Get("/api/auth/{provider}/callback", oauthHandler.OAuthCallback)
 	r.Post("/api/auth/{provider}/token", oauthHandler.OAuthToken)
+
+	// Push notifications (public - VAPID key needed before auth)
+	r.Get("/api/notifications/vapid-public-key", pushHandler.GetVAPIDPublicKey)
 
 	// Interest rates (public - no auth required)
 	r.Get("/api/interest-rates", interestRateHandler.ListRates)
@@ -168,6 +181,13 @@ func main() {
 		// Current user
 		r.Get("/api/auth/me", authHandler.Me)
 		r.Put("/api/auth/settings", authHandler.UpdateSettings)
+		r.Post("/api/auth/refresh", authHandler.RefreshToken)
+
+		// 2FA management
+		r.Post("/api/auth/2fa/setup", totpHandler.Setup)
+		r.Post("/api/auth/2fa/verify", totpHandler.Verify)
+		r.Post("/api/auth/2fa/disable", totpHandler.Disable)
+		r.Post("/api/auth/2fa/backup-codes", totpHandler.RegenerateBackupCodes)
 
 		// Dashboard
 		r.Get("/api/dashboard", dashboardHandler.GetDashboard)
@@ -176,6 +196,7 @@ func main() {
 		// Transactions
 		r.Get("/api/transactions", transactionHandler.List)
 		r.Post("/api/transactions", transactionHandler.Create)
+		r.Get("/api/transactions/export/csv", exportHandler.ExportTransactionsCSV)
 		r.Get("/api/transactions/{id}", transactionHandler.Get)
 		r.Put("/api/transactions/{id}", transactionHandler.Update)
 		r.Delete("/api/transactions/{id}", transactionHandler.Delete)
@@ -198,12 +219,13 @@ func main() {
 		// Debt Management
 		r.Get("/api/debts", debtHandler.List)
 		r.Post("/api/debts", debtHandler.Create)
+		r.Get("/api/debts/summary", debtHandler.GetSummary)
+		r.Get("/api/debts/calculator", debtHandler.InterestCalculator)
 		r.Get("/api/debts/{id}", debtHandler.Get)
 		r.Put("/api/debts/{id}", debtHandler.Update)
 		r.Delete("/api/debts/{id}", debtHandler.Delete)
 		r.Post("/api/debts/{id}/payment", debtHandler.MakePayment)
 		r.Get("/api/debts/{id}/payoff-plan", debtHandler.GetPayoffPlan)
-		r.Get("/api/debts/calculator", debtHandler.InterestCalculator)
 
 		// Recurring Transactions
 		r.Get("/api/recurring", recurringHandler.List)
@@ -219,9 +241,16 @@ func main() {
 		// Reports
 		r.Get("/api/reports/monthly", reportHandler.GetMonthlyReport)
 		r.Get("/api/reports/category-trends", reportHandler.GetCategoryTrends)
+		r.Get("/api/reports/monthly/{year}/{month}/export/pdf", exportHandler.ExportMonthlyReportPDF)
 
 		// AI Chat
 		r.Post("/api/chat", aiHandler.Chat)
+
+		// Push Notifications
+		r.Post("/api/notifications/subscribe", pushHandler.Subscribe)
+		r.Delete("/api/notifications/unsubscribe", pushHandler.Unsubscribe)
+		r.Get("/api/notifications/preferences", pushHandler.GetPreferences)
+		r.Put("/api/notifications/preferences", pushHandler.UpdatePreferences)
 	})
 
 	// Initialize and start scheduler for interest rate scraping
@@ -279,4 +308,41 @@ func main() {
 	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Printf("Server failed: %v", err)
 	}
+}
+
+// TOTPUserRepoAdapter adapts UserRepository to TOTPUserRepository interface.
+type TOTPUserRepoAdapter struct {
+	userRepo *repository.UserRepository
+}
+
+func (a *TOTPUserRepoAdapter) GetByID(ctx context.Context, id uuid.UUID) (*service.UserEntity, error) {
+	user, err := a.userRepo.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	return &service.UserEntity{
+		ID:              user.ID,
+		Email:           user.Email,
+		Name:            user.Name,
+		TOTPSecret:      user.TOTPSecret,
+		TOTPEnabled:     user.TOTPEnabled,
+		TOTPBackupCodes: user.TOTPBackupCodes,
+		TOTPVerifiedAt:  user.TOTPVerifiedAt,
+	}, nil
+}
+
+func (a *TOTPUserRepoAdapter) UpdateTOTPSecret(ctx context.Context, userID uuid.UUID, secret *string) error {
+	return a.userRepo.UpdateTOTPSecret(ctx, userID, secret)
+}
+
+func (a *TOTPUserRepoAdapter) EnableTOTP(ctx context.Context, userID uuid.UUID, backupCodes []string) error {
+	return a.userRepo.EnableTOTP(ctx, userID, backupCodes)
+}
+
+func (a *TOTPUserRepoAdapter) DisableTOTP(ctx context.Context, userID uuid.UUID) error {
+	return a.userRepo.DisableTOTP(ctx, userID)
+}
+
+func (a *TOTPUserRepoAdapter) UpdateBackupCodes(ctx context.Context, userID uuid.UUID, codes []string) error {
+	return a.userRepo.UpdateBackupCodes(ctx, userID, codes)
 }

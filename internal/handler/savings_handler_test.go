@@ -47,6 +47,14 @@ func (m *MockSavingsGoalService) List(ctx context.Context, userID uuid.UUID) ([]
 	return args.Get(0).([]model.SavingsGoal), args.Error(1)
 }
 
+func (m *MockSavingsGoalService) ListWithProjections(ctx context.Context, userID uuid.UUID) ([]service.SavingsGoalWithProjection, error) {
+	args := m.Called(ctx, userID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]service.SavingsGoalWithProjection), args.Error(1)
+}
+
 func (m *MockSavingsGoalService) Update(ctx context.Context, id, userID uuid.UUID, input service.UpdateSavingsGoalInput) (*model.SavingsGoal, error) {
 	args := m.Called(ctx, id, userID, input)
 	if args.Get(0) == nil {
@@ -209,8 +217,8 @@ func TestSavingsGoalHandler_List(t *testing.T) {
 		{
 			name: "success",
 			setupMock: func(m *MockSavingsGoalService, userID uuid.UUID) {
-				m.On("List", mock.Anything, userID).Return([]model.SavingsGoal{
-					{ID: uuid.New(), Name: "Emergency Fund"},
+				m.On("ListWithProjections", mock.Anything, userID).Return([]service.SavingsGoalWithProjection{
+					{SavingsGoal: model.SavingsGoal{ID: uuid.New(), Name: "Emergency Fund"}},
 				}, nil)
 			},
 			wantStatus: http.StatusOK,
@@ -218,7 +226,7 @@ func TestSavingsGoalHandler_List(t *testing.T) {
 		{
 			name: "service error",
 			setupMock: func(m *MockSavingsGoalService, userID uuid.UUID) {
-				m.On("List", mock.Anything, userID).Return(nil, errors.New("error"))
+				m.On("ListWithProjections", mock.Anything, userID).Return(nil, errors.New("error"))
 			},
 			wantStatus: http.StatusInternalServerError,
 		},

@@ -5,10 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
+	"github.com/pquerna/otp/totp"
 	"golang.org/x/crypto/bcrypt"
 
 	"github.com/wealthpath/backend/internal/model"
@@ -22,6 +24,7 @@ var (
 	ErrEmailTaken          = errors.New("email already taken")
 	ErrOAuthFailed         = errors.New("OAuth authentication failed")
 	ErrUnsupportedCurrency = errors.New("unsupported currency")
+	ErrTOTPRequired        = errors.New("2FA verification required")
 )
 
 // UserRepositoryInterface defines the contract for user data access.
@@ -60,8 +63,10 @@ type LoginInput struct {
 }
 
 type AuthResponse struct {
-	Token string      `json:"token"`
-	User  *model.User `json:"user"`
+	Token        string      `json:"token,omitempty"`
+	User         *model.User `json:"user,omitempty"`
+	RequiresTOTP bool        `json:"requiresTOTP,omitempty"`
+	TempToken    string      `json:"tempToken,omitempty"` // Temporary token for 2FA flow
 }
 
 // Register creates a new user account with email and password.
@@ -110,6 +115,7 @@ func (s *UserService) Register(ctx context.Context, input RegisterInput) (*AuthR
 
 // Login authenticates a user with email and password.
 // Returns ErrInvalidCredentials if the credentials are incorrect.
+// If 2FA is enabled, returns RequiresTOTP=true with a TempToken instead of the full token.
 func (s *UserService) Login(ctx context.Context, input LoginInput) (*AuthResponse, error) {
 	user, err := s.repo.GetByEmail(ctx, input.Email)
 	if err != nil {
@@ -125,6 +131,100 @@ func (s *UserService) Login(ctx context.Context, input LoginInput) (*AuthRespons
 
 	if err := bcrypt.CompareHashAndPassword([]byte(*user.PasswordHash), []byte(input.Password)); err != nil {
 		return nil, ErrInvalidCredentials
+	}
+
+	// Check if 2FA is enabled
+	if user.TOTPEnabled {
+		tempToken, err := generateTempToken(user.ID)
+		if err != nil {
+			return nil, fmt.Errorf("generating temp token: %w", err)
+		}
+		return &AuthResponse{
+			RequiresTOTP: true,
+			TempToken:    tempToken,
+		}, nil
+	}
+
+	token, err := generateToken(user.ID)
+	if err != nil {
+		return nil, fmt.Errorf("generating token: %w", err)
+	}
+
+	return &AuthResponse{Token: token, User: user}, nil
+}
+
+// LoginWithTOTP completes login for users with 2FA enabled.
+// Requires a valid temp token (from Login) and a valid TOTP code.
+func (s *UserService) LoginWithTOTP(ctx context.Context, tempToken, code string) (*AuthResponse, error) {
+	userID, err := ValidateTempToken(tempToken)
+	if err != nil {
+		return nil, ErrInvalidCredentials
+	}
+
+	user, err := s.repo.GetByID(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("fetching user: %w", err)
+	}
+
+	if !user.TOTPEnabled || user.TOTPSecret == nil {
+		return nil, ErrInvalidCredentials
+	}
+
+	// Import totp package for validation
+	// Note: This creates a dependency on the totp package
+	// For cleaner architecture, consider using the TOTPService
+	if err := validateTOTPCode(*user.TOTPSecret, code); err != nil {
+		return nil, ErrInvalidCredentials
+	}
+
+	token, err := generateToken(user.ID)
+	if err != nil {
+		return nil, fmt.Errorf("generating token: %w", err)
+	}
+
+	return &AuthResponse{Token: token, User: user}, nil
+}
+
+// LoginWithBackupCode completes login using a backup code.
+func (s *UserService) LoginWithBackupCode(ctx context.Context, tempToken, backupCode string) (*AuthResponse, error) {
+	userID, err := ValidateTempToken(tempToken)
+	if err != nil {
+		return nil, ErrInvalidCredentials
+	}
+
+	user, err := s.repo.GetByID(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("fetching user: %w", err)
+	}
+
+	if !user.TOTPEnabled {
+		return nil, ErrInvalidCredentials
+	}
+
+	// Find and remove the backup code
+	normalizedCode := normalizeBackupCode(backupCode)
+	var newCodes []string
+	found := false
+
+	for _, c := range user.TOTPBackupCodes {
+		if normalizeBackupCode(c) == normalizedCode {
+			found = true
+			continue // Don't include this code in new list (consume it)
+		}
+		newCodes = append(newCodes, c)
+	}
+
+	if !found {
+		return nil, ErrInvalidCredentials
+	}
+
+	// Update backup codes in the repository
+	if repo, ok := s.repo.(interface {
+		UpdateBackupCodes(ctx context.Context, userID uuid.UUID, codes []string) error
+	}); ok {
+		if err := repo.UpdateBackupCodes(ctx, userID, newCodes); err != nil {
+			return nil, fmt.Errorf("updating backup codes: %w", err)
+		}
 	}
 
 	token, err := generateToken(user.ID)
@@ -177,6 +277,22 @@ func (s *UserService) UpdateSettings(ctx context.Context, userID uuid.UUID, inpu
 	}
 
 	return user, nil
+}
+
+// RefreshToken generates a new JWT token for an authenticated user.
+// This allows mobile apps to refresh their tokens without re-authenticating.
+func (s *UserService) RefreshToken(ctx context.Context, userID uuid.UUID) (*AuthResponse, error) {
+	user, err := s.repo.GetByID(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("fetching user %s for token refresh: %w", userID, err)
+	}
+
+	token, err := generateToken(user.ID)
+	if err != nil {
+		return nil, fmt.Errorf("generating new token: %w", err)
+	}
+
+	return &AuthResponse{Token: token, User: user}, nil
 }
 
 // GenerateTokenForTest generates a JWT token for testing purposes.
@@ -332,4 +448,82 @@ func (s *UserService) GoogleLogin(ctx context.Context, code string) (*AuthRespon
 
 func (s *UserService) GoogleLoginWithToken(ctx context.Context, accessToken string) (*AuthResponse, error) {
 	return s.OAuthLoginWithToken(ctx, "google", accessToken)
+}
+
+// ============ TOTP HELPERS ============
+
+// generateTempToken creates a short-lived token for 2FA flow.
+// This token is valid for 5 minutes and can only be used to complete 2FA login.
+func generateTempToken(userID uuid.UUID) (string, error) {
+	secret := os.Getenv("JWT_SECRET")
+	if secret == "" {
+		secret = "dev-secret-change-in-production"
+	}
+
+	claims := jwt.MapClaims{
+		"sub":  userID.String(),
+		"exp":  time.Now().Add(time.Minute * 5).Unix(),
+		"iat":  time.Now().Unix(),
+		"type": "2fa_temp",
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString([]byte(secret))
+}
+
+// ValidateTempToken validates a temporary token from the 2FA flow.
+func ValidateTempToken(tokenString string) (uuid.UUID, error) {
+	secret := os.Getenv("JWT_SECRET")
+	if secret == "" {
+		secret = "dev-secret-change-in-production"
+	}
+
+	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, errors.New("unexpected signing method")
+		}
+		return []byte(secret), nil
+	})
+
+	if err != nil || !token.Valid {
+		return uuid.Nil, errors.New("invalid token")
+	}
+
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok {
+		return uuid.Nil, errors.New("invalid claims")
+	}
+
+	// Verify this is a temp token
+	tokenType, ok := claims["type"].(string)
+	if !ok || tokenType != "2fa_temp" {
+		return uuid.Nil, errors.New("not a temporary token")
+	}
+
+	userID, err := uuid.Parse(claims["sub"].(string))
+	if err != nil {
+		return uuid.Nil, errors.New("invalid user id in token")
+	}
+
+	return userID, nil
+}
+
+// validateTOTPCode validates a TOTP code against the secret.
+func validateTOTPCode(secret, code string) error {
+	if !totp.Validate(code, secret) {
+		return errors.New("invalid code")
+	}
+	return nil
+}
+
+// normalizeBackupCode normalizes a backup code for comparison.
+func normalizeBackupCode(code string) string {
+	// Remove dashes and convert to uppercase
+	normalized := ""
+	for _, c := range code {
+		if c != '-' && c != ' ' {
+			normalized += string(c)
+		}
+	}
+	return strings.ToUpper(normalized)
 }

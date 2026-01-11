@@ -46,34 +46,41 @@ func (s *BudgetService) SetTransactionRepo(repo TransactionRepoForBudget) {
 }
 
 type CreateBudgetInput struct {
-	Category  string          `json:"category"`
-	Amount    decimal.Decimal `json:"amount"`
-	Currency  string          `json:"currency"`
-	Period    string          `json:"period"` // monthly, weekly, yearly
-	StartDate time.Time       `json:"startDate"`
-	EndDate   *time.Time      `json:"endDate"`
+	Category          string           `json:"category"`
+	Amount            decimal.Decimal  `json:"amount"`
+	Currency          string           `json:"currency"`
+	Period            string           `json:"period"` // monthly, weekly, yearly
+	StartDate         time.Time        `json:"startDate"`
+	EndDate           *time.Time       `json:"endDate"`
+	EnableRollover    bool             `json:"enableRollover"`
+	MaxRolloverAmount *decimal.Decimal `json:"maxRolloverAmount,omitempty"`
 }
 
 type UpdateBudgetInput struct {
-	Category  string          `json:"category"`
-	Amount    decimal.Decimal `json:"amount"`
-	Currency  string          `json:"currency"`
-	Period    string          `json:"period"`
-	StartDate time.Time       `json:"startDate"`
-	EndDate   *time.Time      `json:"endDate"`
+	Category          string           `json:"category"`
+	Amount            decimal.Decimal  `json:"amount"`
+	Currency          string           `json:"currency"`
+	Period            string           `json:"period"`
+	StartDate         time.Time        `json:"startDate"`
+	EndDate           *time.Time       `json:"endDate"`
+	EnableRollover    bool             `json:"enableRollover"`
+	MaxRolloverAmount *decimal.Decimal `json:"maxRolloverAmount,omitempty"`
 }
 
 // Create creates a new budget for the given user.
 // Defaults currency to USD and period to monthly if not specified.
 func (s *BudgetService) Create(ctx context.Context, userID uuid.UUID, input CreateBudgetInput) (*model.Budget, error) {
 	budget := &model.Budget{
-		UserID:    userID,
-		Category:  input.Category,
-		Amount:    input.Amount,
-		Currency:  input.Currency,
-		Period:    input.Period,
-		StartDate: input.StartDate,
-		EndDate:   input.EndDate,
+		UserID:            userID,
+		Category:          input.Category,
+		Amount:            input.Amount,
+		Currency:          input.Currency,
+		Period:            input.Period,
+		StartDate:         input.StartDate,
+		EndDate:           input.EndDate,
+		EnableRollover:    input.EnableRollover,
+		MaxRolloverAmount: input.MaxRolloverAmount,
+		RolloverAmount:    decimal.Zero,
 	}
 
 	if budget.Currency == "" {
@@ -135,10 +142,12 @@ func (s *BudgetService) ListWithSpent(ctx context.Context, userID uuid.UUID) ([]
 			return nil, fmt.Errorf("calculating spent for budget %s: %w", budget.ID, err)
 		}
 
-		remaining := budget.Amount.Sub(spent)
+		// Effective budget includes rollover amount
+		effectiveBudget := budget.Amount.Add(budget.RolloverAmount)
+		remaining := effectiveBudget.Sub(spent)
 		percentage := float64(0)
-		if !budget.Amount.IsZero() {
-			percentage = spent.Div(budget.Amount).Mul(decimal.NewFromInt(100)).InexactFloat64()
+		if !effectiveBudget.IsZero() {
+			percentage = spent.Div(effectiveBudget).Mul(decimal.NewFromInt(100)).InexactFloat64()
 		}
 
 		result[i] = model.BudgetWithSpent{
@@ -170,6 +179,8 @@ func (s *BudgetService) Update(ctx context.Context, id uuid.UUID, userID uuid.UU
 	budget.Period = input.Period
 	budget.StartDate = input.StartDate
 	budget.EndDate = input.EndDate
+	budget.EnableRollover = input.EnableRollover
+	budget.MaxRolloverAmount = input.MaxRolloverAmount
 
 	if err := s.repo.Update(ctx, budget); err != nil {
 		return nil, fmt.Errorf("updating budget %s: %w", id, err)

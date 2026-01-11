@@ -240,6 +240,28 @@ func (h *DebtHandler) GetPayoffPlan(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, plan)
 }
 
+// GetSummary godoc
+// @Summary Get debt summary
+// @Description Get aggregate debt projections including debt-free date
+// @Tags debts
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} service.DebtSummary
+// @Failure 401 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /debts/summary [get]
+func (h *DebtHandler) GetSummary(w http.ResponseWriter, r *http.Request) {
+	userID := GetUserID(r.Context())
+
+	summary, err := h.service.GetDebtSummary(r.Context(), userID)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "failed to get debt summary")
+		return
+	}
+
+	respondJSON(w, http.StatusOK, summary)
+}
+
 // InterestCalculator godoc
 // @Summary Calculate loan interest
 // @Description Calculate interest and payment schedule for a loan
