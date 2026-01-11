@@ -90,8 +90,74 @@ jobs:
             ${{ env.MIGRATIONS_IMAGE }}:latest
             ${{ env.MIGRATIONS_IMAGE }}:${{ github.sha }}
 
+  # =============================================================================
+  # K8s GitOps Deployment (New - ArgoCD)
+  # =============================================================================
+  update-k8s-manifests:
+    name: Update K8s Image Tags
+    runs-on: ubuntu-latest
+    needs: [build-backend, build-migrations]
+    if: success()
+    env:
+      K8S_REPO_TOKEN: ${{ secrets.K8S_REPO_TOKEN }}
+
+    steps:
+      - name: Skip if K8S_REPO_TOKEN not set
+        if: env.K8S_REPO_TOKEN == ''
+        run: |
+          echo "⚠️ K8S_REPO_TOKEN not set, skipping K8s manifest update"
+          echo "To enable K8s GitOps deployment, add K8S_REPO_TOKEN secret to this repository"
+
+      - name: Checkout K8s repo
+        if: env.K8S_REPO_TOKEN != ''
+        uses: actions/checkout@v4
+        with:
+          repository: wealthpathorganization/wealthpath-k8s
+          token: ${{ secrets.K8S_REPO_TOKEN }}
+          path: k8s-repo
+
+      - name: Setup Kustomize
+        if: env.K8S_REPO_TOKEN != ''
+        uses: imranismail/setup-kustomize@v2
+
+      - name: Update image tags
+        if: env.K8S_REPO_TOKEN != ''
+        working-directory: k8s-repo/overlays/production
+        run: |
+          kustomize edit set image \
+            ghcr.io/wealthpathorganization/backend=ghcr.io/wealthpathorganization/backend:${{ github.sha }}
+          kustomize edit set image \
+            ghcr.io/wealthpathorganization/migrations=ghcr.io/wealthpathorganization/migrations:${{ github.sha }}
+
+      - name: Commit and push
+        if: env.K8S_REPO_TOKEN != ''
+        working-directory: k8s-repo
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git add .
+          git diff --staged --quiet || git commit -m "chore: update backend to ${{ github.sha }}
+
+          Backend: ghcr.io/wealthpathorganization/backend:${{ github.sha }}
+          Migrations: ghcr.io/wealthpathorganization/migrations:${{ github.sha }}
+
+          Triggered by: ${{ github.event.head_commit.message }}"
+          git push
+
+      - name: Log K8s update
+        if: env.K8S_REPO_TOKEN != ''
+        run: |
+          echo "=== K8s Manifests Updated ==="
+          echo "Backend: ${{ env.BACKEND_IMAGE }}:${{ github.sha }}"
+          echo "Migrations: ${{ env.MIGRATIONS_IMAGE }}:${{ github.sha }}"
+          echo "ArgoCD will automatically sync the changes."
+          echo "=============================="
+
+  # =============================================================================
+  # Ansible Deployment (Legacy - keep during migration)
+  # =============================================================================
   notify-deploy:
-    name: Trigger Auto-Deploy
+    name: Trigger Auto-Deploy (Ansible)
     runs-on: ubuntu-latest
     needs: [build-backend, build-migrations]
     if: success()
@@ -124,6 +190,6 @@ jobs:
       - name: Skip deploy notification
         if: env.DEPLOY_TOKEN == ''
         run: |
-          echo "⚠️ DEPLOY_TOKEN not set, skipping auto-deploy"
-          echo "To enable auto-deploy, add DEPLOY_TOKEN secret to this repository"
+          echo "⚠️ DEPLOY_TOKEN not set, skipping Ansible auto-deploy"
+          echo "To enable Ansible auto-deploy, add DEPLOY_TOKEN secret to this repository"
 
