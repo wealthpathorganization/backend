@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 	"github.com/shopspring/decimal"
 )
 
@@ -18,7 +19,7 @@ type User struct {
 	AvatarURL       *string    `db:"avatar_url" json:"avatarUrl,omitempty"`
 	TOTPSecret      *string    `db:"totp_secret" json:"-"`
 	TOTPEnabled     bool       `db:"totp_enabled" json:"totpEnabled"`
-	TOTPBackupCodes []string   `db:"totp_backup_codes" json:"-"`
+	TOTPBackupCodes pq.StringArray `db:"totp_backup_codes" json:"-"`
 	TOTPVerifiedAt  *time.Time `db:"totp_verified_at" json:"-"`
 	CreatedAt       time.Time  `db:"created_at" json:"createdAt"`
 	UpdatedAt       time.Time  `db:"updated_at" json:"updatedAt"`
@@ -285,4 +286,51 @@ type NotificationLog struct {
 	SentAt           time.Time        `db:"sent_at" json:"sentAt"`
 	Success          bool             `db:"success" json:"success"`
 	ErrorMessage     *string          `db:"error_message" json:"errorMessage,omitempty"`
+}
+
+// Refresh Tokens for Remember Me feature
+
+// DeviceInfo stores information about the device/browser used for a session
+type DeviceInfo struct {
+	Browser    string `json:"browser,omitempty"`
+	OS         string `json:"os,omitempty"`
+	DeviceType string `json:"deviceType,omitempty"` // desktop, mobile, tablet
+	IP         string `json:"ip,omitempty"`
+}
+
+// RefreshToken represents a refresh token for persistent sessions
+type RefreshToken struct {
+	ID            uuid.UUID   `db:"id" json:"id"`
+	UserID        uuid.UUID   `db:"user_id" json:"userId"`
+	TokenHash     string      `db:"token_hash" json:"-"` // Never expose in JSON
+	DeviceInfo    *DeviceInfo `db:"device_info" json:"deviceInfo,omitempty"`
+	CreatedAt     time.Time   `db:"created_at" json:"createdAt"`
+	ExpiresAt     time.Time   `db:"expires_at" json:"expiresAt"`
+	LastUsedAt    time.Time   `db:"last_used_at" json:"lastUsedAt"`
+	RevokedAt     *time.Time  `db:"revoked_at" json:"revokedAt,omitempty"`
+	RevokedReason *string     `db:"revoked_reason" json:"revokedReason,omitempty"`
+}
+
+// IsExpired returns true if the token has expired
+func (rt *RefreshToken) IsExpired() bool {
+	return time.Now().After(rt.ExpiresAt)
+}
+
+// IsRevoked returns true if the token has been revoked
+func (rt *RefreshToken) IsRevoked() bool {
+	return rt.RevokedAt != nil
+}
+
+// IsValid returns true if the token is valid (not expired and not revoked)
+func (rt *RefreshToken) IsValid() bool {
+	return !rt.IsExpired() && !rt.IsRevoked()
+}
+
+// Session represents an active user session for display purposes
+type Session struct {
+	ID         uuid.UUID   `json:"id"`
+	DeviceInfo *DeviceInfo `json:"deviceInfo,omitempty"`
+	CreatedAt  time.Time   `json:"createdAt"`
+	LastUsedAt time.Time   `json:"lastUsedAt"`
+	IsCurrent  bool        `json:"isCurrent"`
 }
