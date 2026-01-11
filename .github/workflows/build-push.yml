@@ -91,10 +91,10 @@ jobs:
             ${{ env.MIGRATIONS_IMAGE }}:${{ github.sha }}
 
   # =============================================================================
-  # K8s GitOps Deployment (New - ArgoCD)
+  # K8s GitOps Deployment (ArgoCD via PR)
   # =============================================================================
-  update-k8s-manifests:
-    name: Update K8s Image Tags
+  trigger-k8s-update:
+    name: Trigger K8s PR
     runs-on: ubuntu-latest
     needs: [build-backend, build-migrations]
     if: success()
@@ -105,53 +105,49 @@ jobs:
       - name: Skip if K8S_REPO_TOKEN not set
         if: env.K8S_REPO_TOKEN == ''
         run: |
-          echo "⚠️ K8S_REPO_TOKEN not set, skipping K8s manifest update"
+          echo "⚠️ K8S_REPO_TOKEN not set, skipping K8s PR creation"
           echo "To enable K8s GitOps deployment, add K8S_REPO_TOKEN secret to this repository"
 
-      - name: Checkout K8s repo
+      - name: Trigger K8s PR for backend
         if: env.K8S_REPO_TOKEN != ''
-        uses: actions/checkout@v4
+        uses: peter-evans/repository-dispatch@v3
         with:
-          repository: wealthpathorganization/wealthpath-k8s
           token: ${{ secrets.K8S_REPO_TOKEN }}
-          path: k8s-repo
+          repository: wealthpathorganization/wealthpath-k8s
+          event-type: update-image
+          client-payload: |
+            {
+              "component": "backend",
+              "image_tag": "${{ github.sha }}",
+              "repository": "${{ github.repository }}",
+              "source_sha": "${{ github.sha }}",
+              "commit_message": "${{ github.event.head_commit.message }}"
+            }
 
-      - name: Setup Kustomize
+      - name: Trigger K8s PR for migrations
         if: env.K8S_REPO_TOKEN != ''
-        uses: imranismail/setup-kustomize@v2
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.K8S_REPO_TOKEN }}
+          repository: wealthpathorganization/wealthpath-k8s
+          event-type: update-image
+          client-payload: |
+            {
+              "component": "migrations",
+              "image_tag": "${{ github.sha }}",
+              "repository": "${{ github.repository }}",
+              "source_sha": "${{ github.sha }}",
+              "commit_message": "${{ github.event.head_commit.message }}"
+            }
 
-      - name: Update image tags
-        if: env.K8S_REPO_TOKEN != ''
-        working-directory: k8s-repo/overlays/production
-        run: |
-          kustomize edit set image \
-            ghcr.io/wealthpathorganization/backend=ghcr.io/wealthpathorganization/backend:${{ github.sha }}
-          kustomize edit set image \
-            ghcr.io/wealthpathorganization/migrations=ghcr.io/wealthpathorganization/migrations:${{ github.sha }}
-
-      - name: Commit and push
-        if: env.K8S_REPO_TOKEN != ''
-        working-directory: k8s-repo
-        run: |
-          git config user.name "GitHub Actions"
-          git config user.email "actions@github.com"
-          git add .
-          git diff --staged --quiet || git commit -m "chore: update backend to ${{ github.sha }}
-
-          Backend: ghcr.io/wealthpathorganization/backend:${{ github.sha }}
-          Migrations: ghcr.io/wealthpathorganization/migrations:${{ github.sha }}
-
-          Triggered by: ${{ github.event.head_commit.message }}"
-          git push
-
-      - name: Log K8s update
+      - name: Log K8s PR trigger
         if: env.K8S_REPO_TOKEN != ''
         run: |
-          echo "=== K8s Manifests Updated ==="
+          echo "=== K8s PR Triggered ==="
           echo "Backend: ${{ env.BACKEND_IMAGE }}:${{ github.sha }}"
           echo "Migrations: ${{ env.MIGRATIONS_IMAGE }}:${{ github.sha }}"
-          echo "ArgoCD will automatically sync the changes."
-          echo "=============================="
+          echo "PRs will be created in wealthpath-k8s repo"
+          echo "========================"
 
   # =============================================================================
   # Ansible Deployment (Legacy - keep during migration)
