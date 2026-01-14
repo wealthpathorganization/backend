@@ -253,6 +253,17 @@ type PushSubscription struct {
 	UpdatedAt time.Time `db:"updated_at" json:"updatedAt"`
 }
 
+// MobilePushToken represents an Expo push token for mobile devices
+type MobilePushToken struct {
+	ID         uuid.UUID `db:"id" json:"id"`
+	UserID     uuid.UUID `db:"user_id" json:"userId"`
+	Token      string    `db:"token" json:"token"` // ExponentPushToken[xxx]
+	Platform   string    `db:"platform" json:"platform"` // ios, android
+	DeviceName string    `db:"device_name" json:"deviceName"`
+	CreatedAt  time.Time `db:"created_at" json:"createdAt"`
+	UpdatedAt  time.Time `db:"updated_at" json:"updatedAt"`
+}
+
 type NotificationPreferences struct {
 	ID                    uuid.UUID `db:"id" json:"id"`
 	UserID                uuid.UUID `db:"user_id" json:"userId"`

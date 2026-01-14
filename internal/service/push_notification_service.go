@@ -27,6 +27,9 @@ type PushRepositoryInterface interface {
 	UpsertPreferences(ctx context.Context, prefs *model.NotificationPreferences) error
 	LogNotification(ctx context.Context, log *model.NotificationLog) error
 	HasRecentNotification(ctx context.Context, userID uuid.UUID, notifType model.NotificationType, refID *uuid.UUID, refDate *time.Time) (bool, error)
+	// Mobile push token methods
+	CreateMobileToken(ctx context.Context, token *model.MobilePushToken) error
+	DeleteMobileToken(ctx context.Context, userID uuid.UUID, token string) error
 }
 
 type PushNotificationService struct {
@@ -293,6 +296,28 @@ func (s *PushNotificationService) SendBudgetAlert(ctx context.Context, userID uu
 	_ = s.repo.LogNotification(ctx, log)
 
 	return err
+}
+
+// RegisterMobileToken registers an Expo push token for mobile devices
+func (s *PushNotificationService) RegisterMobileToken(ctx context.Context, userID uuid.UUID, token, platform, deviceName string) (*model.MobilePushToken, error) {
+	mobileToken := &model.MobilePushToken{
+		ID:         uuid.New(),
+		UserID:     userID,
+		Token:      token,
+		Platform:   platform,
+		DeviceName: deviceName,
+	}
+
+	if err := s.repo.CreateMobileToken(ctx, mobileToken); err != nil {
+		return nil, err
+	}
+
+	return mobileToken, nil
+}
+
+// UnregisterMobileToken removes an Expo push token
+func (s *PushNotificationService) UnregisterMobileToken(ctx context.Context, userID uuid.UUID, token string) error {
+	return s.repo.DeleteMobileToken(ctx, userID, token)
 }
 
 // SendGoalMilestone sends a savings goal milestone notification
