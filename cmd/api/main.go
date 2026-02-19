@@ -157,8 +157,8 @@ func main() {
 	r.Post("/api/auth/login", authHandler.Login)
 	r.Post("/api/auth/login/2fa", authHandler.LoginWithTOTP)
 	r.Post("/api/auth/login/2fa/backup", authHandler.LoginWithBackupCode)
-	r.Post("/api/auth/refresh", authHandler.RefreshAccessToken)  // Cookie-based refresh (public)
-	r.Post("/api/auth/logout", authHandler.Logout)               // Logout (public)
+	r.Post("/api/auth/refresh", authHandler.RefreshAccessToken) // Cookie-based refresh (public)
+	r.Post("/api/auth/logout", authHandler.Logout)              // Logout (public)
 
 	// OAuth routes - supports facebook, google, etc.
 	r.Get("/api/auth/{provider}", oauthHandler.OAuthLogin)
@@ -178,6 +178,9 @@ func main() {
 	r.Post("/api/interest-rates/seed", interestRateHandler.SeedRates)                 // Admin: seed sample data
 	r.Post("/api/interest-rates/scrape", interestRateHandler.ScrapeRates)             // Admin: scrape live rates
 
+	// Public debt calculator (no auth required)
+	r.Get("/api/debts/calculator", debtHandler.InterestCalculator)
+
 	// Protected routes
 	r.Group(func(r chi.Router) {
 		r.Use(handler.AuthMiddleware)
@@ -185,7 +188,7 @@ func main() {
 		// Current user
 		r.Get("/api/auth/me", authHandler.Me)
 		r.Put("/api/auth/settings", authHandler.UpdateSettings)
-		r.Post("/api/auth/refresh-legacy", authHandler.RefreshToken)  // Legacy refresh (requires auth)
+		r.Post("/api/auth/refresh-legacy", authHandler.RefreshToken) // Legacy refresh (requires auth)
 
 		// Session management
 		r.Get("/api/auth/sessions", sessionHandler.ListSessions)
@@ -229,7 +232,6 @@ func main() {
 		r.Get("/api/debts", debtHandler.List)
 		r.Post("/api/debts", debtHandler.Create)
 		r.Get("/api/debts/summary", debtHandler.GetSummary)
-		r.Get("/api/debts/calculator", debtHandler.InterestCalculator)
 		r.Get("/api/debts/{id}", debtHandler.Get)
 		r.Put("/api/debts/{id}", debtHandler.Update)
 		r.Delete("/api/debts/{id}", debtHandler.Delete)

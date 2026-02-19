@@ -159,3 +159,28 @@ func (r *PushRepository) GetUsersNearBudgetLimit(ctx context.Context) ([]uuid.UU
 	err := r.db.SelectContext(ctx, &userIDs, query)
 	return userIDs, err
 }
+
+// Mobile Push Tokens
+
+// CreateMobileToken creates or updates a mobile push token
+func (r *PushRepository) CreateMobileToken(ctx context.Context, token *model.MobilePushToken) error {
+	query := `
+		INSERT INTO mobile_push_tokens (id, user_id, token, platform, device_name, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
+		ON CONFLICT (user_id, token) DO UPDATE SET
+			platform = EXCLUDED.platform,
+			device_name = EXCLUDED.device_name,
+			updated_at = NOW()
+		RETURNING id, created_at, updated_at`
+
+	return r.db.QueryRowxContext(ctx, query,
+		token.ID, token.UserID, token.Token, token.Platform, token.DeviceName,
+	).Scan(&token.ID, &token.CreatedAt, &token.UpdatedAt)
+}
+
+// DeleteMobileToken removes a mobile push token
+func (r *PushRepository) DeleteMobileToken(ctx context.Context, userID uuid.UUID, token string) error {
+	query := `DELETE FROM mobile_push_tokens WHERE user_id = $1 AND token = $2`
+	_, err := r.db.ExecContext(ctx, query, userID, token)
+	return err
+}

@@ -18,6 +18,9 @@ type PushServiceInterface interface {
 	Unsubscribe(ctx context.Context, userID uuid.UUID, endpoint string) error
 	GetPreferences(ctx context.Context, userID uuid.UUID) (*model.NotificationPreferences, error)
 	UpdatePreferences(ctx context.Context, prefs *model.NotificationPreferences) error
+	// Mobile push token methods
+	RegisterMobileToken(ctx context.Context, userID uuid.UUID, token, platform, deviceName string) (*model.MobilePushToken, error)
+	UnregisterMobileToken(ctx context.Context, userID uuid.UUID, token string) error
 }
 
 type PushHandler struct {
@@ -224,4 +227,88 @@ func (h *PushHandler) UpdatePreferences(w http.ResponseWriter, r *http.Request) 
 	}
 
 	respondJSON(w, http.StatusOK, prefs)
+}
+
+// Mobile Push Token Endpoints
+
+type registerMobileTokenRequest struct {
+	Token      string `json:"token"`
+	Platform   string `json:"platform"`
+	DeviceName string `json:"deviceName"`
+}
+
+// RegisterMobileToken registers an Expo push token for mobile devices
+// @Summary Register mobile push token
+// @Tags notifications
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param input body registerMobileTokenRequest true "Token data"
+// @Success 201 {object} model.MobilePushToken
+// @Router /api/notifications/register [post]
+func (h *PushHandler) RegisterMobileToken(w http.ResponseWriter, r *http.Request) {
+	userID, ok := r.Context().Value(UserIDKey).(uuid.UUID)
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	var req registerMobileTokenRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	if req.Token == "" || req.Platform == "" {
+		respondError(w, http.StatusBadRequest, "token and platform are required")
+		return
+	}
+
+	token, err := h.service.RegisterMobileToken(r.Context(), userID, req.Token, req.Platform, req.DeviceName)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "Failed to register token")
+		return
+	}
+
+	respondJSON(w, http.StatusCreated, map[string]bool{"success": true})
+	_ = token // Token created successfully
+}
+
+type unregisterMobileTokenRequest struct {
+	Token string `json:"token"`
+}
+
+// UnregisterMobileToken removes an Expo push token
+// @Summary Unregister mobile push token
+// @Tags notifications
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param input body unregisterMobileTokenRequest true "Token to remove"
+// @Success 200 {object} map[string]bool
+// @Router /api/notifications/unregister [post]
+func (h *PushHandler) UnregisterMobileToken(w http.ResponseWriter, r *http.Request) {
+	userID, ok := r.Context().Value(UserIDKey).(uuid.UUID)
+	if !ok {
+		respondError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	var req unregisterMobileTokenRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	if req.Token == "" {
+		respondError(w, http.StatusBadRequest, "token is required")
+		return
+	}
+
+	if err := h.service.UnregisterMobileToken(r.Context(), userID, req.Token); err != nil {
+		respondError(w, http.StatusInternalServerError, "Failed to unregister token")
+		return
+	}
+
+	respondJSON(w, http.StatusOK, map[string]bool{"success": true})
 }
